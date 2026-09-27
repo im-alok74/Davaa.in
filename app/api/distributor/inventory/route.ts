@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db"
+import { sql, withTransaction } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth-server"
 import { NextResponse } from "next/server"
 
@@ -165,132 +165,97 @@ export async function POST(request: Request) {
 
     const distributorId = distributorProfile[0].id
 
-    // Resolve medicine id: either existing or create a new catalog entry
-    let resolvedMedicineId = (medicineId as number | null) || null
-
-    if (isNewMedicine) {
-      if (!newMedicine || !newMedicine.name || !newMedicine.mrp) {
-        return NextResponse.json(
-          { error: "New medicine details are incomplete" },
-          { status: 400 }
-        )
-      }
-
-      const created = await sql`
-        INSERT INTO medicines (
-          name,
-          generic_name,
-          manufacturer,
-          category,
-          form,
-          strength,
-          pack_size,
-          mrp,
-          image_url,
-          requires_prescription,
-          status
-        )
-        VALUES (
-          ${newMedicine.name},
-          ${newMedicine.generic_name},
-          ${newMedicine.manufacturer},
-          ${newMedicine.category},
-          ${newMedicine.form},
-          ${newMedicine.strength},
-          ${newMedicine.pack_size},
-          ${newMedicine.mrp},
-          ${newMedicine.image_url || null},
-          ${newMedicine.requires_prescription ?? false},
-          'active'
-        )
-        RETURNING id
-      `
-
-      resolvedMedicineId = (created[0] as any).id
-
-      // Store additional images for this medicine if provided
-      if (Array.isArray(imageUrls)) {
-        for (const url of imageUrls) {
-          if (url && String(url).trim()) {
-            await sql`
-              INSERT INTO medicine_images (medicine_id, image_url, source)
-              VALUES (${resolvedMedicineId}, ${String(url).trim()}, 'distributor')
-            `
-          }
-        }
-      }
-    }
-
-    if (!resolvedMedicineId) {
+    if (isNewMedicine && (!newMedicine || !newMedicine.name || !newMedicine.mrp)) {
       return NextResponse.json(
-        { error: "Medicine not found" },
-        { status: 404 }
+        { error: "New medicine details are incomplete" },
+        { status: 400 }
       )
-    }
-
-    // Ensure referenced medicine exists when using existing ID
-    if (!isNewMedicine) {
-      const medicine = await sql`
-        SELECT id, name FROM medicines WHERE id = ${resolvedMedicineId}
-      `
-
-      if (medicine.length === 0) {
-        return NextResponse.json({ error: "Medicine not found" }, { status: 404 })
-      }
     }
 
     // Calculate amount
     const amount = quantity * resolvedWholesalePrice
 
-    try {
-      // Try to insert a new batch row
-      const result = await sql`
-        INSERT INTO distributor_medicines 
+    // A blank batch number used to fall through to NULL, and NULL is never equal to
+    // NULL — so the unique constraint on (distributor_id, medicine_id, batch_number)
+    // never fired for two blank-batch adds of the same medicine, and the try/catch
+    // below that keyed off it silently created a second, invisible row instead of
+    // accumulating stock. Normalizing to a real value fixes both matching paths.
+    const normalizedBatchNumber = batchNumber || "N/A"
+
+    // Catalog lookup/create + the inventory upsert are one unit: a failure partway
+    // through previously left an orphaned medicines/medicine_images row behind with
+    // no stock, and there was no rollback path for any of it.
+    const result = await withTransaction(async (query) => {
+      let resolvedMedicineId = (medicineId as number | null) || null
+
+      if (isNewMedicine) {
+        const created = await query<{ id: number }>`
+          INSERT INTO medicines (
+            name, generic_name, manufacturer, category, form, strength, pack_size,
+            mrp, image_url, requires_prescription, status
+          )
+          VALUES (
+            ${newMedicine.name}, ${newMedicine.generic_name}, ${newMedicine.manufacturer},
+            ${newMedicine.category}, ${newMedicine.form}, ${newMedicine.strength},
+            ${newMedicine.pack_size}, ${newMedicine.mrp}, ${newMedicine.image_url || null},
+            ${newMedicine.requires_prescription ?? false}, 'active'
+          )
+          RETURNING id
+        `
+
+        resolvedMedicineId = created[0].id
+
+        if (Array.isArray(imageUrls)) {
+          for (const url of imageUrls) {
+            if (url && String(url).trim()) {
+              await query`
+                INSERT INTO medicine_images (medicine_id, image_url, source)
+                VALUES (${resolvedMedicineId}, ${String(url).trim()}, 'distributor')
+              `
+            }
+          }
+        }
+      } else if (resolvedMedicineId) {
+        const medicine = await query<{ id: number }>`
+          SELECT id FROM medicines WHERE id = ${resolvedMedicineId}
+        `
+        if (medicine.length === 0) resolvedMedicineId = null
+      }
+
+      if (!resolvedMedicineId) {
+        return { ok: false as const, status: 404, error: "Medicine not found" }
+      }
+
+      const inserted = await query<Record<string, any>>`
+        INSERT INTO distributor_medicines
         (distributor_id, medicine_id, batch_number, mfg_date, expiry_date, mrp, quantity, unit_price, amount, hsn_code, notes)
-        VALUES 
-        (${distributorId}, ${resolvedMedicineId}, ${batchNumber || null}, ${mfgDate || null}, ${expiryDate}, ${mrp}, ${quantity}, ${resolvedWholesalePrice}, ${amount}, ${hsnCode || null}, ${notes || null})
+        VALUES
+        (${distributorId}, ${resolvedMedicineId}, ${normalizedBatchNumber}, ${mfgDate || null}, ${expiryDate}, ${mrp}, ${quantity}, ${resolvedWholesalePrice}, ${amount}, ${hsnCode || null}, ${notes || null})
+        ON CONFLICT (distributor_id, medicine_id, batch_number)
+        DO UPDATE SET
+          quantity = distributor_medicines.quantity + EXCLUDED.quantity,
+          unit_price = EXCLUDED.unit_price,
+          amount = (distributor_medicines.quantity + EXCLUDED.quantity) * EXCLUDED.unit_price,
+          expiry_date = EXCLUDED.expiry_date,
+          mrp = EXCLUDED.mrp,
+          mfg_date = EXCLUDED.mfg_date,
+          hsn_code = EXCLUDED.hsn_code,
+          notes = EXCLUDED.notes
         RETURNING *
       `
 
-      return NextResponse.json({ 
-        success: true, 
-        item: result[0],
-        message: "Medicine added to inventory"
-      })
-    } catch (error: any) {
-      // If this medicine+batch already exists, treat it as adding fresh stock
-      if (error.message?.includes("duplicate") || error.message?.includes("unique constraint")) {
-        const updated = await sql`
-          UPDATE distributor_medicines
-          SET quantity = quantity + ${quantity},
-              amount = (quantity + ${quantity}) * unit_price,
-              expiry_date = ${expiryDate},
-              mrp = ${mrp},
-              mfg_date = ${mfgDate || null},
-              hsn_code = ${hsnCode || null},
-              notes = ${notes || null}
-          WHERE distributor_id = ${distributorId}
-            AND medicine_id = ${resolvedMedicineId}
-            AND batch_number IS NOT DISTINCT FROM ${batchNumber || null}
-          RETURNING *
-        `
+      return { ok: true as const, item: inserted[0] }
+    })
 
-        if (updated.length === 0) {
-          return NextResponse.json(
-            { error: "Failed to update existing stock" },
-            { status: 500 }
-          )
-        }
-
-        return NextResponse.json({
-          success: true,
-          item: updated[0],
-          message: "Existing batch updated with fresh stock",
-        })
-      }
-
-      throw error
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
     }
+
+    return NextResponse.json({
+      success: true,
+      item: result.item,
+      message: "Medicine added to inventory"
+    })
   } catch (error: any) {
     console.error("[v0] Add inventory error:", error)
 

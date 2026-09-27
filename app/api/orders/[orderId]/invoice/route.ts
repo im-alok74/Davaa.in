@@ -150,7 +150,10 @@ export async function GET(
       `
     }
 
-    const gst = order.subtotal * 0.05
+    // Use the tax actually charged (lib/pricing.ts sums each line's real gst_rate, up
+    // to 28%), not a flat 5% — otherwise this "Tax Invoice" doesn't add up to the total
+    // it shows for any order containing a non-5%-GST medicine.
+    const gst = Number(order.tax_amount ?? 0)
 
     // Generate HTML invoice
     const invoiceHTML = `

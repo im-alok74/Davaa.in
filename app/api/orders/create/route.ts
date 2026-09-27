@@ -79,7 +79,7 @@ async function loadPricedCart(query: TransactionQuery, userId: number): Promise<
         ON pp.id = pi.pharmacy_id
        AND pp.verification_status = 'verified'
       WHERE pi.stock_quantity > 0
-        AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+        AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ORDER BY
         pi.medicine_id,
         pi.selling_price * (1 - COALESCE(pi.discount_percentage, 0) / 100.0) ASC,

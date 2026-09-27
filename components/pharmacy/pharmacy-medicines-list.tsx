@@ -56,6 +56,11 @@ export default function PharmacyMedicinesList() {
         })))
         setTotal(data.total ?? 0)
         setTotalPages(data.totalPages ?? 1)
+        // A delete can empty the current page — step back instead of showing a
+        // stuck "Page 3 of 2" with an empty table.
+        if (page > (data.totalPages ?? 1)) {
+          setPage(data.totalPages ?? 1)
+        }
       } else {
         toast({
           title: "Error",
@@ -106,12 +111,16 @@ export default function PharmacyMedicinesList() {
     }
   }
 
+  // expiryDate is a bare "YYYY-MM-DD" DATE column. Parsing it plain would parse as
+  // UTC midnight and compare against the viewer's local wall-clock time, flipping
+  // these badges up to a day early/late depending on timezone. Appending a local
+  // midnight time keeps both sides of the comparison in the same timezone.
   const isExpired = (expiryDate: string) => {
-    return new Date(expiryDate) < new Date()
+    return new Date(`${expiryDate}T00:00:00`) < new Date()
   }
 
   const isExpiringSoon = (expiryDate: string) => {
-    const expiryTime = new Date(expiryDate).getTime()
+    const expiryTime = new Date(`${expiryDate}T00:00:00`).getTime()
     const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime()
     return expiryTime < thirtyDaysFromNow && !isExpired(expiryDate)
   }

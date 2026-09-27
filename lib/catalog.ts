@@ -148,7 +148,7 @@ async function loadStockedCatalog(): Promise<StockedProduct[]> {
         WHERE mr.medicine_id = m.id AND mr.status = 'published'
       ) r ON TRUE
       WHERE pi.stock_quantity > 0
-        AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+        AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ORDER BY
         lower(btrim(m.name)), COALESCE(m.strength, ''), COALESCE(m.pack_size, ''),
         COALESCE(pi.discount_percentage, 0) DESC, pi.selling_price ASC

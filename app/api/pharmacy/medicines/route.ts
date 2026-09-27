@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth-server'
-import { sql } from '@/lib/db'
+import { sql, withTransaction } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -110,74 +110,101 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create or get medicine
-    let medicineId: number
-    const existingMedicine = await sql`
-      SELECT id FROM medicines 
-      WHERE name = ${medicineName} 
-      AND (manufacturer = ${manufacturer || null} OR manufacturer IS NULL)
-    ` as any[]
-
-    if (existingMedicine && existingMedicine.length > 0) {
-      medicineId = existingMedicine[0].id
-    } else {
-      const newMedicine = await sql`
-        INSERT INTO medicines (name, generic_name, manufacturer, hsn_code, mfg_date, mrp, image_url)
-        VALUES (${medicineName}, ${genericName || null}, ${manufacturer || null}, ${hsnCode || null}, ${mfgDate || null}, ${mrp}, ${imageUrl || null})
-        RETURNING id
-      ` as any[]
-      medicineId = newMedicine[0].id
-    }
-
     // Calculate amount
     const amount = parseFloat(quantity) * parseFloat(unitPrice)
 
-    // Add to pharmacy medicines
-    const result = await sql`
-      INSERT INTO pharmacy_medicines (
-        pharmacy_id, medicine_id, hsn_code, batch_number, mfg_date, 
-        expiry_date, mrp, quantity, unit_price, amount, notes
-      )
-      VALUES (
-        ${pharmacyId}, ${medicineId}, ${hsnCode || 'N/A'}, ${batchNumber || 'N/A'}, 
-        ${mfgDate || null}, ${expiryDate}, ${mrp}, ${quantity}, ${unitPrice}, 
-        ${amount}, ${notes || null}
-      )
-      RETURNING id
-    ` as any[]
+    // A blank batch number must normalize to the same real value everywhere it's used
+    // as part of a (pharmacy_id, medicine_id, batch_number) unique key — NULL is never
+    // equal to NULL, so two blank-batch adds of the same medicine would otherwise
+    // bypass both constraints below and fragment into duplicate rows instead of
+    // accumulating stock.
+    const normalizedBatchNumber = batchNumber || "N/A"
 
-    // Manual pharmacy stock should also be available to customers.
-    await sql`
-      INSERT INTO pharmacy_inventory (
-        pharmacy_id,
-        medicine_id,
-        stock_quantity,
-        selling_price,
-        discount_percentage,
-        batch_number,
-        expiry_date
-      )
-      VALUES (
-        ${pharmacyId},
-        ${medicineId},
-        ${quantity},
-        ${unitPrice},
-        0,
-        ${batchNumber || null},
-        ${expiryDate}
-      )
-      ON CONFLICT (pharmacy_id, medicine_id, batch_number)
-      DO UPDATE SET
-        stock_quantity = pharmacy_inventory.stock_quantity + EXCLUDED.stock_quantity,
-        selling_price = EXCLUDED.selling_price,
-        discount_percentage = EXCLUDED.discount_percentage,
-        expiry_date = COALESCE(EXCLUDED.expiry_date, pharmacy_inventory.expiry_date),
-        last_updated = CURRENT_TIMESTAMP
-    `
+    // Catalog lookup/create + both inventory writes are one unit: a failure partway
+    // through previously left an orphaned medicines row with no stock behind it.
+    const pharmacyMedicineId = await withTransaction(async (query) => {
+      // Match on manufacturer with NULL-safe equality so a product from a different
+      // manufacturer sharing a name isn't silently merged onto an existing catalog
+      // row that happens to have no manufacturer recorded.
+      let medicineId: number
+      const existingMedicine = await query<{ id: number }>`
+        SELECT id FROM medicines
+        WHERE name = ${medicineName}
+        AND manufacturer IS NOT DISTINCT FROM ${manufacturer || null}
+      `
+
+      if (existingMedicine.length > 0) {
+        medicineId = existingMedicine[0].id
+      } else {
+        const newMedicine = await query<{ id: number }>`
+          INSERT INTO medicines (name, generic_name, manufacturer, hsn_code, mfg_date, mrp, image_url)
+          VALUES (${medicineName}, ${genericName || null}, ${manufacturer || null}, ${hsnCode || null}, ${mfgDate || null}, ${mrp}, ${imageUrl || null})
+          RETURNING id
+        `
+        medicineId = newMedicine[0].id
+      }
+
+      // Add to pharmacy medicines. ON CONFLICT turns a repeat add of the same
+      // pharmacy+medicine+batch into a stock top-up instead of an uncaught unique-
+      // violation crash (this insert previously had no conflict handling at all).
+      const result = await query<{ id: number }>`
+        INSERT INTO pharmacy_medicines (
+          pharmacy_id, medicine_id, hsn_code, batch_number, mfg_date,
+          expiry_date, mrp, quantity, unit_price, amount, notes
+        )
+        VALUES (
+          ${pharmacyId}, ${medicineId}, ${hsnCode || 'N/A'}, ${normalizedBatchNumber},
+          ${mfgDate || null}, ${expiryDate}, ${mrp}, ${quantity}, ${unitPrice},
+          ${amount}, ${notes || null}
+        )
+        ON CONFLICT (pharmacy_id, medicine_id, batch_number)
+        DO UPDATE SET
+          quantity = pharmacy_medicines.quantity + EXCLUDED.quantity,
+          unit_price = EXCLUDED.unit_price,
+          amount = (pharmacy_medicines.quantity + EXCLUDED.quantity) * EXCLUDED.unit_price,
+          mrp = EXCLUDED.mrp,
+          expiry_date = EXCLUDED.expiry_date,
+          mfg_date = EXCLUDED.mfg_date,
+          hsn_code = EXCLUDED.hsn_code,
+          notes = EXCLUDED.notes
+        RETURNING id
+      `
+
+      // Manual pharmacy stock should also be available to customers.
+      await query`
+        INSERT INTO pharmacy_inventory (
+          pharmacy_id,
+          medicine_id,
+          stock_quantity,
+          selling_price,
+          discount_percentage,
+          batch_number,
+          expiry_date
+        )
+        VALUES (
+          ${pharmacyId},
+          ${medicineId},
+          ${quantity},
+          ${unitPrice},
+          0,
+          ${normalizedBatchNumber},
+          ${expiryDate}
+        )
+        ON CONFLICT (pharmacy_id, medicine_id, batch_number)
+        DO UPDATE SET
+          stock_quantity = pharmacy_inventory.stock_quantity + EXCLUDED.stock_quantity,
+          selling_price = EXCLUDED.selling_price,
+          discount_percentage = EXCLUDED.discount_percentage,
+          expiry_date = COALESCE(EXCLUDED.expiry_date, pharmacy_inventory.expiry_date),
+          last_updated = CURRENT_TIMESTAMP
+      `
+
+      return result[0].id
+    })
 
     return NextResponse.json({
       success: true,
-      medicineId: result[0].id,
+      medicineId: pharmacyMedicineId,
       message: 'Medicine added successfully'
     })
   } catch (error: any) {

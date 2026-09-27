@@ -69,6 +69,11 @@ export function AdminMedicinesTable({ initialMedicines, totalInitialMedicines }:
         setMedicines(data.medicines)
         setTotal(data.total)
         setTotalPages(data.totalPages)
+        // A delete can empty the current page (e.g. deleting the last item on the
+        // last page) — step back rather than leaving "Page 3 of 2" stuck on screen.
+        if (page > data.totalPages) {
+          setPage(data.totalPages)
+        }
       } else {
         toast({
           title: 'Error',

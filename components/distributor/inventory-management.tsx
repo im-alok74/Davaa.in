@@ -742,6 +742,11 @@ export function InventoryTable() {
       setInventory(normalized)
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 1)
+      // A delete can empty the current page — step back instead of showing a
+      // stuck "Page 3 of 2" with an empty table.
+      if (page > (data.totalPages ?? 1)) {
+        setPage(data.totalPages ?? 1)
+      }
     } catch (error) {
       console.error("Error fetching inventory:", error)
       toast({
@@ -795,9 +800,13 @@ export function InventoryTable() {
     }
   }
 
+  // expiryDate is a bare "YYYY-MM-DD" DATE column. Parsing it plain would parse as
+  // UTC midnight and compare against the viewer's local wall-clock time, flipping
+  // these badges up to a day early/late depending on timezone. Appending a local
+  // midnight time keeps both sides of the comparison in the same timezone.
   const isExpiringSoon = (expiryDate: string) => {
     const now = new Date()
-    const expiry = new Date(expiryDate)
+    const expiry = new Date(`${expiryDate}T00:00:00`)
     const daysUntilExpiry = Math.ceil(
       (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     )
@@ -805,7 +814,7 @@ export function InventoryTable() {
   }
 
   const isExpired = (expiryDate: string) => {
-    return new Date(expiryDate) < new Date()
+    return new Date(`${expiryDate}T00:00:00`) < new Date()
   }
 
   if (loading) {

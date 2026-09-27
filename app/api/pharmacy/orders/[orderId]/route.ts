@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth-server"
-import { sql } from "@/lib/db"
+import { sql, withTransaction } from "@/lib/db"
+import { restoreStockForCancelledOrder } from "@/lib/orders"
 import { NextResponse } from "next/server"
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
@@ -20,14 +21,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
     const { status } = await request.json()
     const orderId = (await params).orderId
 
-    const result = await sql`
-      UPDATE orders
-      SET order_status = ${status}, updated_at = NOW()
-      WHERE id = ${orderId} AND pharmacy_id = ${pharmacyId}
-      RETURNING id
-    `
+    const updated = await withTransaction(async (query) => {
+      const [existing] = await query<{ id: number; order_status: string }>`
+        SELECT id, order_status FROM orders
+        WHERE id = ${orderId} AND pharmacy_id = ${pharmacyId}
+      `
+      if (!existing) return null
 
-    if (!result.length) {
+      if (status === "cancelled" && existing.order_status !== "cancelled") {
+        await restoreStockForCancelledOrder(query, existing.id)
+      }
+
+      await query`
+        UPDATE orders SET order_status = ${status}, updated_at = NOW() WHERE id = ${existing.id}
+      `
+      return existing.id
+    })
+
+    if (updated === null) {
       return NextResponse.json({ error: "Order not found or unauthorized" }, { status: 404 })
     }
 

@@ -208,7 +208,7 @@ async function loadNearbyPharmacies(
         JOIN medicines m ON m.id = pi.medicine_id AND m.status = 'active'
         WHERE pi.pharmacy_id = b.id
           AND pi.stock_quantity > 0
-          AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+          AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ) inv ON TRUE
       WHERE
         (b.distance_km IS NOT NULL AND b.distance_km <= ${MAX_DISTANCE_KM})
@@ -292,7 +292,7 @@ export async function getPharmacyById(
         JOIN medicines m ON m.id = pi.medicine_id AND m.status = 'active'
         WHERE pi.pharmacy_id = p.id
           AND pi.stock_quantity > 0
-          AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+          AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ) inv ON TRUE
       WHERE p.id = ${id} AND p.verification_status = 'verified'
       LIMIT 1
@@ -403,7 +403,7 @@ export async function findOffersForMedicine(
         FROM pharmacy_inventory pi
         WHERE pi.medicine_id = ${medicineId}
           AND pi.stock_quantity > 0
-          AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+          AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
         GROUP BY pi.pharmacy_id
       )
       SELECT
@@ -521,7 +521,7 @@ async function loadAvailableNearYou(
       JOIN nearby n ON n.id = pi.pharmacy_id
       JOIN medicines m ON m.id = pi.medicine_id AND m.status = 'active'
       WHERE pi.stock_quantity > 0
-        AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+        AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       GROUP BY m.id
       ORDER BY offer_count DESC, best_price ASC, m.name ASC
       LIMIT ${limit}
@@ -592,7 +592,7 @@ export async function getPharmacyInventory(pharmacyId: number, limit = 24) {
       JOIN medicines m ON m.id = pi.medicine_id AND m.status = 'active'
       WHERE pi.pharmacy_id = ${pharmacyId}
         AND pi.stock_quantity > 0
-        AND (pi.expiry_date IS NULL OR pi.expiry_date > CURRENT_DATE)
+        AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ORDER BY m.id, pi.selling_price ASC
       LIMIT ${limit}
     `

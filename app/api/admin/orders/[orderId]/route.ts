@@ -1,7 +1,8 @@
 import { revalidatePath } from "next/cache"
 import { NextResponse } from "next/server"
 import { requireRole } from "@/lib/auth-server"
-import { sql } from "@/lib/db"
+import { withTransaction } from "@/lib/db"
+import { restoreStockForCancelledOrder } from "@/lib/orders"
 
 export async function PATCH(
   request: Request,
@@ -20,8 +21,6 @@ export async function PATCH(
     // Determine whether the caller provided a numeric DB id or an order_number string
     const isNumericId = !isNaN(numericId)
 
-    console.log("[ADMIN ORDERS] PATCH called with:", { rawId, numericId, isNumericId, status })
-
     const allowedStatuses = [
       "pending",
       "confirmed",
@@ -35,27 +34,27 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 })
     }
 
-    let result
-    if (isNumericId) {
-      result = await sql`
-        UPDATE orders
-        SET order_status = ${status}, updated_at = NOW()
-        WHERE id = ${numericId}
-        RETURNING id
-      `
-    } else {
-      // Treat param as order_number
-      result = await sql`
-        UPDATE orders
-        SET order_status = ${status}, updated_at = NOW()
-        WHERE order_number = ${rawId}
-        RETURNING id
-      `
-    }
+    const updatedId = await withTransaction(async (query) => {
+      const [existing] = isNumericId
+        ? await query<{ id: number; order_status: string }>`
+            SELECT id, order_status FROM orders WHERE id = ${numericId}
+          `
+        : await query<{ id: number; order_status: string }>`
+            SELECT id, order_status FROM orders WHERE order_number = ${rawId}
+          `
+      if (!existing) return null
 
-    console.log("[ADMIN ORDERS] SQL update result:", result)
+      if (status === "cancelled" && existing.order_status !== "cancelled") {
+        await restoreStockForCancelledOrder(query, existing.id)
+      }
 
-    if (result.length === 0) {
+      await query`
+        UPDATE orders SET order_status = ${status}, updated_at = NOW() WHERE id = ${existing.id}
+      `
+      return existing.id
+    })
+
+    if (updatedId === null) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
     }
 
