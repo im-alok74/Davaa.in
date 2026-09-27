@@ -1,3 +1,5 @@
+import { cachedPublic, TAGS, TTL } from "@/lib/cache"
+
 type HealthArticle = {
   title: string
   summary: string
@@ -132,11 +134,13 @@ export async function getHealthArticles(topic?: string): Promise<HealthArticle[]
   return articles
 }
 
-export async function getHealthArticlesWithMeta(topic?: string): Promise<{
+type HealthArticlesResult = {
   articles: HealthArticle[]
   usedFallback: boolean
   modelUsed: string | null
-}> {
+}
+
+async function loadHealthArticlesWithMeta(topic?: string): Promise<HealthArticlesResult> {
   const modelUsed = process.env.GEMINI_API_KEY
     ? (process.env.GEMINI_MODEL || "gemini-2.5-flash")
     : null
@@ -169,6 +173,23 @@ export async function getHealthArticlesWithMeta(topic?: string): Promise<{
     usedFallback: true,
     modelUsed,
   }
+}
+
+/**
+ * The no-topic call is what the homepage teaser and the default `/health-articles`
+ * landing use — same result for every visitor, and otherwise a live Gemini call on
+ * every single page load. A topic search is free-text (see `lib/cache.ts`'s warning
+ * against caching by free-text query), so only this zero-argument case is cached.
+ */
+const getCachedDefaultHealthArticles = cachedPublic(
+  () => loadHealthArticlesWithMeta(undefined),
+  ["health-articles-default"],
+  { revalidate: TTL.TAXONOMY, tags: [TAGS.taxonomy] },
+)
+
+export async function getHealthArticlesWithMeta(topic?: string): Promise<HealthArticlesResult> {
+  const trimmed = topic?.trim()
+  return trimmed ? loadHealthArticlesWithMeta(trimmed) : getCachedDefaultHealthArticles()
 }
 
 export type { HealthArticle }

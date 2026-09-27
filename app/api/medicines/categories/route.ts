@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { cachedPublic, TAGS, TTL } from "@/lib/cache"
 
-export async function GET(_request: NextRequest) {
-  try {
+// Public, identical for every caller, and hit on every "add medicine" form open —
+// worth the Data Cache rather than a DISTINCT scan across three tables per request.
+const getCachedCategories = cachedPublic(
+  async () => {
     const rows = await sql`
       SELECT DISTINCT m.category
       FROM pharmacy_inventory pi
@@ -15,8 +18,15 @@ export async function GET(_request: NextRequest) {
         AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ORDER BY m.category
     `
+    return (rows as any[]).map((r) => r.category)
+  },
+  ["medicine-categories"],
+  { revalidate: TTL.TAXONOMY, tags: [TAGS.taxonomy] },
+)
 
-    const categories = (rows as any[]).map((r) => r.category)
+export async function GET(_request: NextRequest) {
+  try {
+    const categories = await getCachedCategories()
     return NextResponse.json({ categories })
   } catch (error: any) {
     console.error("[MEDICINE CATEGORIES] Error:", error)

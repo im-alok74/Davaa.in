@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { cachedPublic, TAGS, TTL } from "@/lib/cache"
 
-export async function GET(_request: NextRequest) {
-  try {
+// Same shape and same caller as /api/medicines/categories — see that file for why
+// this is cached.
+const getCachedForms = cachedPublic(
+  async () => {
     const rows = await sql`
       SELECT DISTINCT m.form
       FROM pharmacy_inventory pi
@@ -15,8 +18,15 @@ export async function GET(_request: NextRequest) {
         AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
       ORDER BY m.form
     `
+    return (rows as any[]).map((r) => r.form)
+  },
+  ["medicine-forms"],
+  { revalidate: TTL.TAXONOMY, tags: [TAGS.taxonomy] },
+)
 
-    const forms = (rows as any[]).map((r) => r.form)
+export async function GET(_request: NextRequest) {
+  try {
+    const forms = await getCachedForms()
     return NextResponse.json({ forms })
   } catch (error: any) {
     console.error("[MEDICINE FORMS] Error:", error)
