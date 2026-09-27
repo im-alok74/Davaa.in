@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       WHERE pm.pharmacy_id = ${pharmacyId}
       GROUP BY pm.id, m.id
       ORDER BY pm.created_at DESC
+      LIMIT 500
     ` as any[]
 
     return NextResponse.json({

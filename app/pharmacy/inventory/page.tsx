@@ -15,7 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-export default async function PharmacyInventoryPage() {
+const PAGE_SIZE = 50
+
+export default async function PharmacyInventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
   const user = await getCurrentUser()
 
   if (!user || user.user_type !== "pharmacy") {
@@ -32,6 +38,12 @@ export default async function PharmacyInventoryPage() {
     redirect("/pharmacy/register")
   }
 
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, Number(pageParam) || 1)
+  const offset = (page - 1) * PAGE_SIZE
+
+  const pharmacyId = (pharmacyProfile[0] as any).id
+
   const pharmacyInventory = await sql`
     SELECT
       pi.id,
@@ -45,9 +57,16 @@ export default async function PharmacyInventoryPage() {
       pi.last_updated
     FROM pharmacy_inventory pi
     JOIN medicines m ON pi.medicine_id = m.id
-    WHERE pi.pharmacy_id = ${(pharmacyProfile[0] as any).id}
+    WHERE pi.pharmacy_id = ${pharmacyId}
     ORDER BY pi.last_updated DESC
+    LIMIT ${PAGE_SIZE} OFFSET ${offset}
   `
+
+  const [{ total }] = await sql`
+    SELECT COUNT(*)::int AS total FROM pharmacy_inventory WHERE pharmacy_id = ${pharmacyId}
+  ` as any[]
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -103,6 +122,26 @@ export default async function PharmacyInventoryPage() {
                   ))}
                 </TableBody>
               </Table>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-border p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {pharmacyInventory.length} of {total} items
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button asChild variant="outline" size="sm" disabled={page <= 1}>
+                      <Link href={`/pharmacy/inventory?page=${page - 1}`} aria-disabled={page <= 1}>
+                        Previous
+                      </Link>
+                    </Button>
+                    <span className="text-sm font-medium">Page {page} of {totalPages}</span>
+                    <Button asChild variant="outline" size="sm" disabled={page >= totalPages}>
+                      <Link href={`/pharmacy/inventory?page=${page + 1}`} aria-disabled={page >= totalPages}>
+                        Next
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

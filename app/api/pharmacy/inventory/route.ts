@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
 import { sql } from "@/lib/db"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
 
@@ -24,6 +24,11 @@ export async function GET() {
     if (pharmacyResult[0].verification_status !== "verified") {
       return NextResponse.json({ error: "Pharmacy not verified yet" }, { status: 403 })
     }
+
+    const searchParams = request.nextUrl.searchParams
+    const page = Math.max(1, Number(searchParams.get("page")) || 1)
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 20))
+    const offset = (page - 1) * limit
 
     const inventory = await sql`
       SELECT
@@ -50,9 +55,23 @@ export async function GET() {
       WHERE pi.pharmacy_id = ${pharmacyResult[0].id}
       GROUP BY pi.id, m.id
       ORDER BY pi.last_updated DESC
+      LIMIT ${limit} OFFSET ${offset}
     ` as any[]
 
-    return NextResponse.json({ inventory })
+    const countResult = await sql`
+      SELECT COUNT(*)::int AS total
+      FROM pharmacy_inventory pi
+      WHERE pi.pharmacy_id = ${pharmacyResult[0].id}
+    `
+    const total = Number(countResult[0]?.total ?? 0)
+
+    return NextResponse.json({
+      inventory,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    })
   } catch (error: any) {
     console.error("[PHARMACY INVENTORY] Error fetching inventory:", error)
     return NextResponse.json(

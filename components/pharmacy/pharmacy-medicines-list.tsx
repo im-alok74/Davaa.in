@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Trash2, Edit2, AlertCircle } from "lucide-react"
+import { Trash2, Edit2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { medicineImageSrc } from "@/lib/images"
 
@@ -26,18 +26,24 @@ interface Medicine {
   last_updated?: string
 }
 
+const PAGE_SIZE = 20
+
 export default function PharmacyMedicinesList() {
   const [medicines, setMedicines] = useState<Medicine[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
     fetchMedicines()
-  }, [])
+  }, [page])
 
   const fetchMedicines = async () => {
+    setIsLoading(true)
     try {
-      const response = await fetch("/api/pharmacy/inventory")
+      const response = await fetch(`/api/pharmacy/inventory?page=${page}&limit=${PAGE_SIZE}`)
       const data = await response.json()
 
       if (response.ok) {
@@ -48,6 +54,8 @@ export default function PharmacyMedicinesList() {
           discount_percentage: Number(item.discount_percentage || 0),
           mrp: item.mrp !== undefined && item.mrp !== null ? Number(item.mrp) : undefined,
         })))
+        setTotal(data.total ?? 0)
+        setTotalPages(data.totalPages ?? 1)
       } else {
         toast({
           title: "Error",
@@ -80,7 +88,7 @@ export default function PharmacyMedicinesList() {
           title: "Success",
           description: "Medicine removed from storefront successfully"
         })
-        setMedicines((currentMedicines) => currentMedicines.filter((medicine) => medicine.id !== id))
+        fetchMedicines()
       } else {
         const data = await response.json()
         toast({
@@ -115,7 +123,7 @@ export default function PharmacyMedicinesList() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Store Medicines ({medicines.length})</CardTitle>
+        <CardTitle>Store Medicines ({total})</CardTitle>
       </CardHeader>
       <CardContent>
         {medicines.length === 0 ? (
@@ -190,6 +198,34 @@ export default function PharmacyMedicinesList() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-4">
+            <p className="text-sm text-muted-foreground">
+              Showing {medicines.length} of {total} medicines
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm font-medium">Page {page} of {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

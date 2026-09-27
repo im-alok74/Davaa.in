@@ -28,9 +28,14 @@ export async function GET(request: Request) {
 
     const distributorId = distributorProfile[0].id
 
+    const { searchParams } = new URL(request.url)
+    const page = Math.max(1, Number(searchParams.get("page")) || 1)
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 20))
+    const offset = (page - 1) * limit
+
     // Get inventory with medicine details
     const inventory = await sql`
-      SELECT 
+      SELECT
         dm.id,
         dm.medicine_id,
         dm.batch_number,
@@ -55,15 +60,20 @@ export async function GET(request: Request) {
       JOIN medicines m ON dm.medicine_id = m.id
       WHERE dm.distributor_id = ${distributorId}
       ORDER BY dm.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `
 
-    // Fetch all images in a single batched query (no N+1)
+    const [{ total }] = await sql`
+      SELECT COUNT(*)::int AS total FROM distributor_medicines WHERE distributor_id = ${distributorId}
+    ` as any[]
+
+    // Fetch all images in a single batched query (no N+1) — scoped to this page only
     const medicineIds = (inventory as any[]).map(item => item.medicine_id)
-    
+
     let allImages: any[] = []
     if (medicineIds.length > 0) {
       allImages = await sql`
-        SELECT medicine_id, image_url FROM medicine_images 
+        SELECT medicine_id, image_url FROM medicine_images
         WHERE medicine_id = ANY(${medicineIds})
         ORDER BY medicine_id, created_at ASC
       `
@@ -84,7 +94,13 @@ export async function GET(request: Request) {
       images: imagesByMedicineId.get(item.medicine_id) || [],
     }))
 
-    return NextResponse.json({ inventory: inventoryWithImages })
+    return NextResponse.json({
+      inventory: inventoryWithImages,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    })
   } catch (error: any) {
     console.error("[v0] Distributor inventory error:", error)
     return NextResponse.json(

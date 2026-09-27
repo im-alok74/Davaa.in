@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit2, Plus, Loader2, Pencil } from "lucide-react"
+import { Trash2, Edit2, Plus, Loader2, Pencil, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface InventoryItem {
   id: number
@@ -706,21 +706,26 @@ export function AddMedicineForm() {
   )
 }
 
+const PAGE_SIZE = 20
+
 export function InventoryTable() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<number | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
     fetchInventory()
-  }, [refreshTrigger])
+  }, [refreshTrigger, page])
 
   const fetchInventory = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/distributor/inventory")
+      const response = await fetch(`/api/distributor/inventory?page=${page}&limit=${PAGE_SIZE}`)
       if (!response.ok) {
         throw new Error("Failed to fetch inventory")
       }
@@ -735,6 +740,8 @@ export function InventoryTable() {
         reserved_quantity: it.reserved_quantity !== undefined ? Number(it.reserved_quantity || 0) : undefined,
       }))
       setInventory(normalized)
+      setTotal(data.total ?? 0)
+      setTotalPages(data.totalPages ?? 1)
     } catch (error) {
       console.error("Error fetching inventory:", error)
       toast({
@@ -775,7 +782,7 @@ export function InventoryTable() {
       console.log("Medicine deleted:", data)
 
       toast({ title: "Success", description: data.message })
-      setInventory(inventory.filter((item) => item.id !== id))
+      fetchInventory()
     } catch (error) {
       console.error("Delete error:", error)
       toast({
@@ -904,6 +911,34 @@ export function InventoryTable() {
           ))}
         </TableBody>
       </Table>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {inventory.length} of {total} items
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <span className="text-sm font-medium">Page {page} of {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page === totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
