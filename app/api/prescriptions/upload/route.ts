@@ -2,6 +2,12 @@ import { getCurrentUser } from "@/lib/auth-server"
 import { sql } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { v2 as cloudinary } from "cloudinary"
+import { clientKey, rateLimit } from "@/lib/rate-limit"
+
+/** 20 uploads per IP per 5 minutes — enough for real use, cheap to hit if this
+ *  were left unlimited given every upload costs Cloudinary storage/bandwidth. */
+const LIMIT = 20
+const WINDOW_MS = 5 * 60 * 1000
 
 if (
   !process.env.CLOUDINARY_CLOUD_NAME ||
@@ -22,6 +28,14 @@ export async function POST(request: Request) {
     const user = await getCurrentUser()
     if (!user || user.user_type !== "customer") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const limit = rateLimit(clientKey(request, "prescription-upload"), LIMIT, WINDOW_MS)
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many uploads. Please slow down." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+      )
     }
 
     const formData = await request.formData()
