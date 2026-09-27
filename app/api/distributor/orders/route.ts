@@ -50,10 +50,14 @@ export async function GET(request: Request) {
       ORDER BY o.created_at DESC
     `
 
-    // Get detailed items for each order
+    // Get detailed items for each order — scoped to this distributor's own medicines.
+    // Previously joined order_items straight off order_id with no distributor filter,
+    // so any distributor who supplied a single line item in a multi-distributor order
+    // could see every other distributor's medicines, quantities and prices for that
+    // order (plus the customer's full name/email selected above).
     const ordersWithItems = await Promise.all(orders.map(async (order: any) => {
       const items = await sql`
-        SELECT 
+        SELECT
           oi.id,
           oi.order_id,
           oi.medicine_id,
@@ -65,6 +69,7 @@ export async function GET(request: Request) {
           m.manufacturer
         FROM order_items oi
         JOIN medicines m ON oi.medicine_id = m.id
+        JOIN distributor_medicines dm ON dm.medicine_id = m.id AND dm.distributor_id = ${distributorId}
         WHERE oi.order_id = ${order.id}
       `
       return { ...order, items }
