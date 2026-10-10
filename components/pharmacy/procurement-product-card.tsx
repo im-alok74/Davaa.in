@@ -9,6 +9,7 @@ export interface ProcurementCardItem {
   manufacturer: string
   strength: string
   form: string
+    pack_size?: string
   distributor_name: string
   batch_number: string
   expiry_date: string
@@ -58,19 +59,28 @@ export function ProcurementProductCard({ item, requesting, onAdd, onRequest }: P
           </Badge>
         )}
       </div>
-
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
+              <div className="flex flex-1 flex-col gap-1.5 p-3"> 
         <h3 className="line-clamp-2 text-base font-bold leading-snug text-foreground">
           {item.name}
         </h3>
         {item.generic_name ? (
-          <p className="line-clamp-1 text-sm text-muted-foreground">{item.generic_name}</p>
+          <p className="line-clamp-1 text-sm text-muted-foreground">
+            {item.generic_name}
+          </p>
         ) : null}
-        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? (
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {subtitle}
+          </p>
+        ) : null}
         {item.manufacturer ? (
-          <p className="line-clamp-1 text-sm text-muted-foreground">{item.manufacturer}</p>
+          <p className="line-clamp-1 text-sm text-muted-foreground">
+            {item.manufacturer}
+          </p>
         ) : null}
-
+                {item.pack_size ? (
+          <p className="line-clamp-1 text-sm text-muted-foreground">Pack: {item.pack_size}</p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           Distributor: <span className="font-medium text-foreground">{item.distributor_name}</span>
         </p>

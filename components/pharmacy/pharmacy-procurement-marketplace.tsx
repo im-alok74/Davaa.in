@@ -249,7 +249,7 @@ export function PharmacyProcurementMarketplace() {
   )
 
   return (
-    <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
+    <div className="grid gap-6">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -289,7 +289,7 @@ export function PharmacyProcurementMarketplace() {
             </div>
           ) : (
            <>
-  <div className="grid gap-4 p-4 sm:grid-cols-2 2xl:grid-cols-3">
+  <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
     {items.map((item) => (
       <ProcurementProductCard
         key={item.id}
@@ -323,10 +323,14 @@ export function PharmacyProcurementMarketplace() {
         </CardContent>
       </Card>
 
-      <Card>
+           <Card>
         <CardHeader>
-          <CardTitle>Procurement Cart</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            Purchase Request Cart
+          </CardTitle>
         </CardHeader>
+        
         <CardContent className="space-y-4">
           {cart.length === 0 ? (
             <p className="text-sm text-muted-foreground">
