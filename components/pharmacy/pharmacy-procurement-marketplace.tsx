@@ -325,10 +325,9 @@ export function PharmacyProcurementMarketplace() {
 
            <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4" />
-            Purchase Request Cart
-          </CardTitle>
+        <CardHeader>
+          <CardTitle>Procurement Cart</CardTitle>
+        </CardHeader>
         </CardHeader>
         
         <CardContent className="space-y-4">
