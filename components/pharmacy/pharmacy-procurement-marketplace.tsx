@@ -50,15 +50,21 @@ export function PharmacyProcurementMarketplace() {
   const [showOutOfStock, setShowOutOfStock] = useState(false)
   const [cart, setCart] = useState<CartItem[]>([])
   const [requestingItem, setRequestingItem] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const { toast } = useToast()
 
-  const fetchInventory = async (includeOutOfStock = false) => {
-    setIsLoading(true)
+    const fetchInventory = async (includeOutOfStock = false, pageNum = 1) => {
+    const isFirstPage = pageNum === 1
+    if (isFirstPage) setIsLoading(true)
+    else setIsLoadingMore(true)
     try {
       const params = new URLSearchParams()
       if (query) params.set("q", query)
       if (category) params.set("category", category)
       if (includeOutOfStock) params.set("includeOutOfStock", "true")
+      params.set("page", String(pageNum))
 
       const res = await fetch(`/api/procurement/inventory?${params.toString()}`, {
         credentials: "include",
@@ -74,7 +80,9 @@ export function PharmacyProcurementMarketplace() {
           reserved_quantity: Number(it.reserved_quantity || 0),
           available_quantity: Number(it.available_quantity || 0),
         }))
-        setItems(normalized)
+        setItems((prev) => (isFirstPage ? normalized : [...prev, ...normalized]))
+        setPage(pageNum)
+        setHasMore(Boolean(data.hasMore))
       } else {
         toast({
           title: "Error",
@@ -91,6 +99,7 @@ export function PharmacyProcurementMarketplace() {
       })
     } finally {
       setIsLoading(false)
+      setIsLoadingMore(false)
     }
   }
 
@@ -279,17 +288,37 @@ export function PharmacyProcurementMarketplace() {
               No distributor stock available right now.
             </div>
           ) : (
-            <div className="grid gap-4 p-4 sm:grid-cols-2 2xl:grid-cols-3">
-  {items.map((item) => (
-    <ProcurementProductCard
-      key={item.id}
-      item={item}
-      requesting={requestingItem === item.id}
-      onAdd={() => addToCart(item)}
-      onRequest={() => handleRequestOutOfStock(item)}
-    />
-  ))}
-</div>
+           <>
+  <div className="grid gap-4 p-4 sm:grid-cols-2 2xl:grid-cols-3">
+    {items.map((item) => (
+      <ProcurementProductCard
+        key={item.id}
+        item={item}
+        requesting={requestingItem === item.id}
+        onAdd={() => addToCart(item)}
+        onRequest={() => handleRequestOutOfStock(item)}
+      />
+    ))}
+  </div>
+  {hasMore && (
+    <div className="flex justify-center pb-6">
+      <Button
+        variant="outline"
+        onClick={() => fetchInventory(showOutOfStock, page + 1)}
+        disabled={isLoadingMore}
+      >
+        {isLoadingMore ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading...
+          </>
+        ) : (
+          "Load more"
+        )}
+      </Button>
+    </div>
+  )}
+</>
           )}
         </CardContent>
       </Card>

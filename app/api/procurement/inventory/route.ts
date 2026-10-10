@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
 import { sql } from "@/lib/db"
 
-// Pharmacy marketplace view of distributor stock - includes both in-stock and out-of-stock items
+const DEFAULT_PAGE_SIZE = 24
+const MAX_PAGE_SIZE = 60
+
+// Pharmacy marketplace view of distributor stock, paginated.
+// In-stock items come first; out-of-stock items follow when includeOutOfStock=true.
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
@@ -17,10 +21,16 @@ export async function GET(request: NextRequest) {
     const distributorId = searchParams.get("distributorId")
     const includeOutOfStock = searchParams.get("includeOutOfStock") === "true"
 
-    const qLike = `%${query.toLowerCase()}%`
+    const page = Math.max(1, Number.parseInt(searchParams.get("page") || "1", 10) || 1)
+    const requestedLimit = Number.parseInt(searchParams.get("limit") || "", 10)
+    const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedLimit || DEFAULT_PAGE_SIZE))
+    const offset = (page - 1) * limit
 
-    // Get in-stock items (available for purchase)
-    const inStockResults = await sql`
+    const qLike = `%${query}%`
+
+    // Fetch one extra row so we know whether another page exists
+    // without running a separate (expensive) COUNT query.
+    const rows = (await sql`
       SELECT
         dm.id,
         dm.distributor_id,
@@ -41,93 +51,56 @@ export async function GET(request: NextRequest) {
         dm.quantity,
         dm.reserved_quantity,
         (dm.quantity - dm.reserved_quantity) AS available_quantity,
-        'in_stock' as stock_status
+        CASE
+          WHEN (dm.quantity - dm.reserved_quantity) > 0 THEN 'in_stock'
+          ELSE 'out_of_stock'
+        END AS stock_status
       FROM distributor_medicines dm
       JOIN distributor_profiles dp ON dm.distributor_id = dp.id
       JOIN medicines m ON dm.medicine_id = m.id
-      WHERE (dm.quantity - dm.reserved_quantity) > 0
-        AND dm.expiry_date > NOW()
+      WHERE (
+          ((dm.quantity - dm.reserved_quantity) > 0 AND dm.expiry_date > NOW())
+          OR (${includeOutOfStock} AND (dm.quantity - dm.reserved_quantity) <= 0)
+        )
         AND (${query === ""} OR (
-          LOWER(m.name) LIKE ${qLike}
-          OR LOWER(m.generic_name) LIKE ${qLike}
-          OR LOWER(m.manufacturer) LIKE ${qLike}
+          m.name ILIKE ${qLike}
+          OR m.generic_name ILIKE ${qLike}
+          OR m.manufacturer ILIKE ${qLike}
         ))
         AND (${category === ""} OR m.category = ${category})
         AND (${distributorId === null} OR dm.distributor_id = ${distributorId})
-      ORDER BY m.name ASC, dm.unit_price ASC
-    `
+      ORDER BY ((dm.quantity - dm.reserved_quantity) <= 0) ASC, m.name ASC, dm.unit_price ASC, dm.id ASC
+      LIMIT ${limit + 1} OFFSET ${offset}
+    `) as any[]
 
-    let results: any[] = inStockResults
+    const hasMore = rows.length > limit
+    const pageRows = rows.slice(0, limit)
 
-    // If requested, also get out-of-stock items (available for pre-order/request)
-    if (includeOutOfStock) {
-      const outOfStockResults = await sql`
-        SELECT DISTINCT
-          dm.id,
-          dm.distributor_id,
-          dp.company_name AS distributor_name,
-          dm.medicine_id,
-          m.name,
-          m.generic_name,
-          m.manufacturer,
-          m.category,
-          m.form,
-          m.strength,
-          m.pack_size,
-          m.image_url,
-          dm.batch_number,
-          dm.expiry_date,
-          dm.mrp,
-          dm.unit_price,
-          dm.quantity,
-          dm.reserved_quantity,
-          (dm.quantity - dm.reserved_quantity) AS available_quantity,
-          'out_of_stock' as stock_status
-        FROM distributor_medicines dm
-        JOIN distributor_profiles dp ON dm.distributor_id = dp.id
-        JOIN medicines m ON dm.medicine_id = m.id
-        WHERE (dm.quantity - dm.reserved_quantity) <= 0
-          AND (${query === ""} OR (
-            LOWER(m.name) LIKE ${qLike}
-            OR LOWER(m.generic_name) LIKE ${qLike}
-            OR LOWER(m.manufacturer) LIKE ${qLike}
-          ))
-          AND (${category === ""} OR m.category = ${category})
-          AND (${distributorId === null} OR dm.distributor_id = ${distributorId})
-        ORDER BY m.name ASC, dm.unit_price ASC
-      `
-      results = [...inStockResults, ...outOfStockResults]
-    }
+    // Images only for the items on this page (at most `limit` medicines).
+    const medicineIds = [...new Set(pageRows.map((item) => item.medicine_id))]
 
-    // Fetch all images for all medicines in a single optimized query
-    const medicineIds = [...new Set((results as any[]).map(item => item.medicine_id))]
-    
-    let allImages: any[] = []
+    const imagesByMedicineId = new Map<number, string[]>()
     if (medicineIds.length > 0) {
-      // Fetch all images in one query instead of N+1 queries
-      allImages = await sql`
-        SELECT medicine_id, image_url FROM medicine_images 
+      const allImages = (await sql`
+        SELECT medicine_id, image_url FROM medicine_images
         WHERE medicine_id = ANY(${medicineIds}::int[])
         ORDER BY medicine_id ASC, created_at ASC
-      `
-    }
-    
-    // Group images by medicine_id
-    const imagesByMedicineId = new Map<number, string[]>()
-    for (const img of allImages as any[]) {
-      if (!imagesByMedicineId.has(img.medicine_id)) {
-        imagesByMedicineId.set(img.medicine_id, [])
+      `) as any[]
+
+      for (const img of allImages) {
+        if (!imagesByMedicineId.has(img.medicine_id)) {
+          imagesByMedicineId.set(img.medicine_id, [])
+        }
+        imagesByMedicineId.get(img.medicine_id)!.push(img.image_url)
       }
-      imagesByMedicineId.get(img.medicine_id)!.push(img.image_url)
     }
-    
-    // Attach images to each item
-    const itemsWithImages = (results as any[]).map(item => ({
+
+    const items = pageRows.map((item) => ({
       ...item,
       images: imagesByMedicineId.get(item.medicine_id) || [],
     }))
 
-    return NextResponse.json({ items: itemsWithImages })
+    return NextResponse.json({ items, page, limit, hasMore })
   } catch (error: any) {
     console.error("[PROCUREMENT INVENTORY] Error:", error)
     return NextResponse.json(
@@ -136,4 +109,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
