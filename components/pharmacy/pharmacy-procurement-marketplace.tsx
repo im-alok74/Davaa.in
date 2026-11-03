@@ -323,13 +323,10 @@ export function PharmacyProcurementMarketplace() {
         </CardContent>
       </Card>
 
-           <Card>
-        <CardHeader>
+                <Card>
         <CardHeader>
           <CardTitle>Procurement Cart</CardTitle>
         </CardHeader>
-        </CardHeader>
-        
         <CardContent className="space-y-4">
           {cart.length === 0 ? (
             <p className="text-sm text-muted-foreground">
