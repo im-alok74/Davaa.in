@@ -35,8 +35,8 @@ export function MedicineToolbar({ initialQuery, viewMode = "grid" }: MedicineToo
   const currentView = searchParams.get("view") || viewMode
 
   return (
-    <div className="rounded-4xl border border-border/70 bg-background/90 p-4 shadow-sm sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+    <div className="rounded-xl border border-border/70 bg-background/90 p-3 shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <Link href="/" className="transition hover:text-foreground">
           Home
         </Link>
@@ -52,7 +52,7 @@ export function MedicineToolbar({ initialQuery, viewMode = "grid" }: MedicineToo
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="w-full max-w-2xl flex-1">
           <SearchBar initialQuery={initialQuery ?? searchParams.get("search") ?? ""} showButton={false} className="w-full" />
         </div>

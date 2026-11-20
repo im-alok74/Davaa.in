@@ -161,7 +161,7 @@ export async function MedicineList({
         -- Photographed products first. A grid that opens on grey placeholders reads as an
         -- empty shop, so anything with a real pack shot leads.
         ORDER BY has_image DESC, LOWER(m.name) ASC
-        LIMIT 500
+        LIMIT 1000
       `) as Medicine[]
     } else {
       medicines = (await sql`
@@ -310,7 +310,8 @@ export async function MedicineList({
     )
   }
 
-  const medicinesPerPage = 12
+  // 52 fills the 2- and 4-column grids exactly (13 full rows of 4).
+  const medicinesPerPage = 52
   const totalPages = Math.max(1, Math.ceil(normalizedMedicines.length / medicinesPerPage))
   const safePage = Math.min(page, totalPages)
   const visibleMedicines = normalizedMedicines.slice((safePage - 1) * medicinesPerPage, safePage * medicinesPerPage)
@@ -324,7 +325,7 @@ export async function MedicineList({
         <div className="text-sm text-muted-foreground">Layout: {view === "list" ? "List" : "Grid"}</div>
       </div>
 
-      <div className={view === "list" ? "space-y-4" : "grid gap-4 md:grid-cols-2 xl:grid-cols-3"}>
+      <div className={view === "list" ? "space-y-4" : "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"}>
         {visibleMedicines.map((medicine) => (
           <MedicineCard key={medicine.id} medicine={medicine} />
         ))}
@@ -338,10 +339,15 @@ export async function MedicineList({
           >
             Previous
           </Link>
-          {Array.from({ length: totalPages }, (_, index) => {
-            const pageNumber = index + 1
+          {Array.from({ length: totalPages }, (_, index) => index + 1)
+            // First, last and two either side of the current page; the rest collapse to "…".
+            .filter((n) => n === 1 || n === totalPages || Math.abs(n - safePage) <= 2)
+            .map((pageNumber, i, shown) => {
             const isActive = pageNumber === safePage
+            const gap = i > 0 && pageNumber - shown[i - 1] > 1
             return (
+              <span key={pageNumber} className="contents">
+              {gap ? <span className="px-1 text-muted-foreground">…</span> : null}
               <Link
                 key={pageNumber}
                 href={{ pathname: "/medicines", query: { ...params, page: pageNumber } }}
@@ -349,6 +355,7 @@ export async function MedicineList({
               >
                 {pageNumber}
               </Link>
+              </span>
             )
           })}
           <Link

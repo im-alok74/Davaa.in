@@ -10,6 +10,7 @@ import { ArticlesTeaser } from "@/components/home/articles-teaser"
 import { AvailableNearYou } from "@/components/home/available-near-you"
 import { BestValue, ThemedRails } from "@/components/home/best-value"
 import { Bestsellers } from "@/components/home/bestsellers"
+import { FeaturedMedicines } from "@/components/home/featured-medicines"
 import { CategoryTiles } from "@/components/home/category-tiles"
 import { DoctorsRail } from "@/components/home/doctors-rail"
 import { HealthConditionsRail, type HealthCondition } from "@/components/home/health-conditions-rail"
@@ -117,6 +118,12 @@ export default function HomePage() {
         {/* Signed-in customers with delivered orders only; silent otherwise. */}
         <Suspense fallback={null}>
           <ReorderStrip />
+        </Suspense>
+
+        {/* The catalogue's real pack photography. Independent of pharmacy stock, so the page
+            has something to look at before the first pharmacy lists anything. */}
+        <Suspense fallback={<RailSkeleton />}>
+          <FeaturedMedicines />
         </Suspense>
 
         {/* Leads the browse blocks: most people arrive with a problem ("acidity",

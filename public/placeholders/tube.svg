@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Tube illustration - no product photo"><rect width="240" height="240" fill="#F1F4F5"/>
+<g stroke="#0F6B5E" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+<rect x="100" y="30" width="40" height="26" rx="6" fill="#9ED0C6"/>
+<path d="M92 56h56l8 112H84z" fill="#E8F3F1"/>
+<path d="M84 168h72v14H84z" fill="#BFE0D9"/><path d="M90 182v10M102 182v10M114 182v10M126 182v10M138 182v10M150 182v10" fill="none" stroke-width="4"/>
+<path d="M108 96h24M108 112h24" fill="none"/>
+</g></svg>

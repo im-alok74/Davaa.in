@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { medicineImageSrc, safeImageSrc } from '@/lib/images'
+import { medicineImageOrArt, medicineImageSrc, safeImageSrc } from '@/lib/images'
 
 type Medicine = {
   id: number
@@ -108,6 +108,8 @@ type ReviewStats = {
 
 export type MedicinePdpProps = {
   medicine: Medicine
+  /** Extra photos from `medicine_images`, shown after the primary image. */
+  galleryImages?: string[]
   reviews: Review[]
   reviewStats: ReviewStats
   similarProducts: Medicine[]
@@ -116,7 +118,7 @@ export type MedicinePdpProps = {
 }
 
 function getMedicineImage(medicine: Medicine) {
-  return medicineImageSrc(medicine.photo_url, medicine.image_url)
+  return medicineImageOrArt(medicine.form, medicine.photo_url, medicine.image_url)
 }
 
 function getFinalPrice(medicine: Medicine) {
@@ -176,7 +178,11 @@ function ProductCard({ medicine }: { medicine: Medicine }) {
         {medicine.generic_name && <p className="line-clamp-1 text-xs text-muted-foreground">{medicine.generic_name}</p>}
         <p className="line-clamp-1 text-xs text-muted-foreground">{medicine.manufacturer}</p>
         <div className="pt-1">
-          <p className="text-base font-bold text-primary">₹{pricing.finalPrice.toFixed(2)}</p>
+          {pricing.finalPrice > 0 ? (
+            <p className="text-base font-bold text-primary">₹{pricing.finalPrice.toFixed(2)}</p>
+          ) : (
+            <p className="text-sm font-medium text-muted-foreground">Price not listed yet</p>
+          )}
           {pricing.hasDiscount && (
             <p className="text-xs text-muted-foreground">
               MRP <span className="line-through">₹{pricing.mrp.toFixed(2)}</span> · {pricing.discountPercentage.toFixed(0)}% off
@@ -190,6 +196,7 @@ function ProductCard({ medicine }: { medicine: Medicine }) {
 
 export function MedicinePdp({
   medicine,
+  galleryImages = [],
   reviews,
   reviewStats,
   similarProducts,
@@ -203,7 +210,7 @@ export function MedicinePdp({
   const primaryImage = getMedicineImage(medicine)
   const gallery = Array.from(
     new Set(
-      [medicine.photo_url, medicine.image_url, primaryImage]
+      [medicine.photo_url, medicine.image_url, ...galleryImages, primaryImage]
         .map((candidate) => safeImageSrc(candidate))
         .filter((candidate): candidate is string => candidate !== null),
     ),
@@ -485,7 +492,13 @@ export function MedicinePdp({
                   <CardContent className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
                     <div>
                       <div className="flex items-end gap-3">
-                        <p className="text-3xl font-bold text-primary">₹{pricing.finalPrice.toFixed(2)}</p>
+                        {pricing.finalPrice > 0 ? (
+                          <p className="text-3xl font-bold text-primary">₹{pricing.finalPrice.toFixed(2)}</p>
+                        ) : (
+                          // MRP is stored as 0 when it has not been entered. Showing ₹0.00
+                          // would read as a free medicine, so say what is actually true.
+                          <p className="text-xl font-semibold text-muted-foreground">Price not listed yet</p>
+                        )}
                         {pricing.hasDiscount && (
                           <div className="pb-1 text-sm text-muted-foreground">
                             <span className="line-through">₹{pricing.mrp.toFixed(2)}</span>

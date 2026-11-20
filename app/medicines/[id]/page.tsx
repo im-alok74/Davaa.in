@@ -95,6 +95,27 @@ async function fetchMedicine(medicineId: number): Promise<PdpMedicine | null> {
   return rows[0] || null
 }
 
+/**
+ * Every photo attached to the medicine, in upload order.
+ *
+ * `medicines.image_url` holds only the primary shot; extra pack angles and label photos
+ * live in `medicine_images`. The gallery used to read the primary alone, so every
+ * additional photo was stored but never shown.
+ */
+async function fetchGalleryImages(medicineId: number): Promise<string[]> {
+  try {
+    const rows = await query<{ image_url: string }>`
+      SELECT image_url FROM medicine_images
+      WHERE medicine_id = ${medicineId} AND COALESCE(image_url, '') <> ''
+      ORDER BY id
+    `
+    return rows.map((row) => row.image_url)
+  } catch (error) {
+    console.error("[medicine page] gallery images failed:", error)
+    return []
+  }
+}
+
 async function fetchRelatedProducts(medicine: any) {
   const category = medicine.category
   const manufacturer = medicine.manufacturer
@@ -442,10 +463,11 @@ export default async function MedicineDetailPage({ params }: PageParams) {
    */
   const canonicalPath = medicinePath(medicine)
 
-  const [relatedProducts, { reviews, reviewStats }, substitutes] = await Promise.all([
+  const [relatedProducts, { reviews, reviewStats }, substitutes, galleryImages] = await Promise.all([
     fetchRelatedProducts(medicine),
     fetchReviews(medicine.id),
     fetchSubstitutes(medicine),
+    fetchGalleryImages(medicine.id),
   ])
 
   const listPrice = Number(medicine.selling_price ?? medicine.mrp ?? 0)
@@ -460,6 +482,7 @@ export default async function MedicineDetailPage({ params }: PageParams) {
       <div className="flex-1">
         <MedicinePdp
           medicine={medicine}
+          galleryImages={galleryImages}
           reviews={reviews}
           reviewStats={reviewStats}
           similarProducts={relatedProducts.similarProducts}

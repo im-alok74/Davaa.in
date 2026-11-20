@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Dropper bottle illustration - no product photo"><rect width="240" height="240" fill="#F1F4F5"/>
+<g stroke="#0F6B5E" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+<path d="M112 26h16v26h-16z" fill="#9ED0C6"/><path d="M104 52h32v22h-32z" fill="#BFE0D9"/>
+<path d="M98 74h44v14c10 6 16 14 16 26v66a10 10 0 0 1-10 10H92a10 10 0 0 1-10-10v-66c0-12 6-20 16-26z" fill="#E8F3F1"/>
+<rect x="94" y="120" width="52" height="40" rx="6" fill="#D9ECE8"/><path d="M104 136h32M104 148h20" fill="none"/>
+</g></svg>

@@ -5,7 +5,7 @@ import { Star } from "lucide-react"
 import { AddToCartButton } from "./add-to-cart-button"
 import { WishlistButton } from "./wishlist-button"
 import { formatINR } from "@/lib/pricing"
-import { medicineImageSrc } from "@/lib/images"
+import { medicineImageOrArt } from "@/lib/images"
 
 export interface MedicineCardData {
   id: number
@@ -35,7 +35,7 @@ export interface MedicineCardData {
 function resolveImage(medicine: MedicineCardData): string {
   // Validated rather than merely defaulted: an absolute URL on a host next/image is not
   // configured for throws during render and takes the whole page down with it.
-  return medicineImageSrc(medicine.images?.[0], medicine.photo_url, medicine.image_url)
+  return medicineImageOrArt(medicine.form, medicine.images?.[0], medicine.photo_url, medicine.image_url)
 }
 
 /**
@@ -140,7 +140,12 @@ export function MedicineCard({ medicine }: { medicine: MedicineCardData }) {
 
         <div className="mt-auto pt-2">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="price text-lg">{formatINR(finalPrice)}</span>
+            {finalPrice > 0 ? (
+              <span className="price text-lg">{formatINR(finalPrice)}</span>
+            ) : (
+              // MRP is 0 until someone enters it; "₹0.00" would read as a free medicine.
+              <span className="text-sm font-medium text-muted-foreground">Price not listed yet</span>
+            )}
             {savings > 0 ? <span className="price-strike">{formatINR(mrp)}</span> : null}
           </div>
           {savings > 0 ? <p className="price-save">You save {formatINR(savings)}</p> : null}

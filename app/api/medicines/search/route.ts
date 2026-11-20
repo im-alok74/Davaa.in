@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
           m.mrp,
           m.image_url,
           m.requires_prescription,
+          m.popularity_score,
           COUNT(*) OVER () AS total_count,
           CASE
             WHEN ${q} = '' THEN 2
@@ -126,9 +127,11 @@ export async function GET(request: NextRequest) {
         offer.pharmacy_name,
         offer.pharmacy_id,
         m.total_count,
-        m.match_rank
+        m.match_rank,
+        m.popularity_score
       ORDER BY
         m.match_rank ASC,
+        CASE WHEN ${sortBy} = 'popularity' THEN m.popularity_score END DESC NULLS LAST,
         CASE WHEN ${sortBy} = 'price_high' THEN m.mrp END DESC,
         CASE WHEN ${sortBy} = 'price_low' THEN m.mrp END ASC,
         CASE WHEN ${sortBy} = 'name' THEN m.name END ASC,

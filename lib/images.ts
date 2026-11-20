@@ -85,6 +85,57 @@ export function medicineImageSrc(
   return PLACEHOLDER_IMAGE
 }
 
+/**
+ * Which neutral illustration stands in for a medicine that has no photo, by dosage form.
+ * Files live in `public/placeholders/`. These are deliberately generic line art: they say
+ * "this is a tablet", never "this is that brand's pack".
+ */
+const FORM_ART: Record<string, string> = {
+  tablet: "tablet",
+  capsule: "capsule",
+  syrup: "bottle",
+  suspension: "bottle",
+  solution: "bottle",
+  liquid: "bottle",
+  mouthwash: "bottle",
+  shampoo: "bottle",
+  oil: "bottle",
+  injection: "vial",
+  infusion: "vial",
+  cream: "tube",
+  ointment: "tube",
+  gel: "tube",
+  lotion: "tube",
+  drops: "dropper",
+  powder: "sachet",
+  granules: "sachet",
+  sachet: "sachet",
+  device: "box",
+  kit: "box",
+  bandage: "box",
+}
+
+/** The illustration for a dosage form, or the plain placeholder when the form is unknown. */
+export function placeholderForForm(form: string | null | undefined): string {
+  const kind = form ? FORM_ART[form.trim().toLowerCase()] : undefined
+  return kind ? `/placeholders/${kind}.svg` : PLACEHOLDER_IMAGE
+}
+
+/**
+ * A real photo when there is one, otherwise the illustration for the medicine's form.
+ * Prefer this over `medicineImageSrc` anywhere the medicine's `form` is to hand.
+ */
+export function medicineImageOrArt(
+  form: string | null | undefined,
+  ...candidates: Array<string | null | undefined>
+): string {
+  for (const candidate of candidates) {
+    const safe = safeImageSrc(candidate)
+    if (safe) return safe
+  }
+  return placeholderForForm(form)
+}
+
 /** True when at least one candidate is a usable image. Use to decide whether to render
  *  an image-led layout at all, rather than showing a grid of identical placeholders. */
 export function hasRealImage(...candidates: Array<string | null | undefined>): boolean {
