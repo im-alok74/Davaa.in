@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
             osr.created_at,
             osr.fulfilled_at,
             pp.pharmacy_name,
-            pp.contact_person as pharmacy_contact,
-            pp.phone as pharmacy_phone,
-            pp.email as pharmacy_email,
-            m.medicine_name,
+            u.full_name AS pharmacy_contact,
+            u.phone AS pharmacy_phone,
+            u.email AS pharmacy_email,
+            m.name AS medicine_name,
             m.generic_name,
             m.manufacturer,
             dm.batch_number,
@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
             dm.quantity as available_quantity
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
+          LEFT JOIN users u ON u.id = pp.user_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           LEFT JOIN distributor_medicines dm ON osr.distributor_medicine_id = dm.id
           WHERE osr.distributor_id = ${distributorId}
@@ -72,10 +73,10 @@ export async function GET(request: NextRequest) {
             osr.created_at,
             osr.fulfilled_at,
             pp.pharmacy_name,
-            pp.contact_person as pharmacy_contact,
-            pp.phone as pharmacy_phone,
-            pp.email as pharmacy_email,
-            m.medicine_name,
+            u.full_name AS pharmacy_contact,
+            u.phone AS pharmacy_phone,
+            u.email AS pharmacy_email,
+            m.name AS medicine_name,
             m.generic_name,
             m.manufacturer,
             dm.batch_number,
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
             dm.quantity as available_quantity
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
+          LEFT JOIN users u ON u.id = pp.user_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           LEFT JOIN distributor_medicines dm ON osr.distributor_medicine_id = dm.id
           WHERE osr.distributor_id = ${distributorId}

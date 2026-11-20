@@ -76,7 +76,7 @@ export default async function PharmacyInventoryPage({
           <div className="mb-8 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
             <Button asChild>
-              <Link href="/pharmacy/inventory/add">
+              <Link href="/pharmacy/medicines/add">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Medicine
               </Link>
@@ -87,7 +87,7 @@ export default async function PharmacyInventoryPage({
             <div className="rounded-lg border border-border bg-card p-12 text-center">
               <p className="text-muted-foreground">No medicines in your inventory yet. Add some to get started!</p>
               <Button asChild className="mt-4">
-                <Link href="/pharmacy/inventory/add">Add Medicine</Link>
+                <Link href="/pharmacy/medicines/add">Add Medicine</Link>
               </Button>
             </div>
           ) : (

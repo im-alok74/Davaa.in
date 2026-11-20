@@ -99,7 +99,7 @@ export async function PATCH(
         UPDATE distributor_profiles
         SET verification_status = ${verification_status},
             verified_at = CASE WHEN ${verification_status} = 'verified' THEN NOW() ELSE NULL END,
-            verified_by = CASE WHEN ${verification_status} = 'verified' THEN ${user.id} ELSE NULL END,
+            verified_by = CASE WHEN ${verification_status} = 'verified' THEN ${user.id}::int ELSE NULL END,
             updated_at = NOW()
         WHERE id = ${distributorId}
         RETURNING *

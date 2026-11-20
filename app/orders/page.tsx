@@ -34,7 +34,7 @@ export default async function OrdersPage() {
       const status = String(order.order_status || "pending")
       acc.total += 1
       if (status === "delivered") acc.delivered += 1
-      if (status === "confirmed" || status === "processing") acc.inProgress += 1
+      if (["confirmed", "preparing", "packed", "ready_for_pickup", "out_for_delivery"].includes(status)) acc.inProgress += 1
       if (status === "cancelled") acc.cancelled += 1
       return acc
     },

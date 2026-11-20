@@ -32,7 +32,11 @@ export async function POST(
   try {
     const { id } = await params
     const body = await request.json()
-    const { quantity_offered, notes } = body
+    const { notes } = body
+    const quantity_offered = Number(body.quantity_offered ?? 0)
+    if (!Number.isInteger(quantity_offered) || quantity_offered < 0) {
+      return NextResponse.json({ error: "Invalid quantity" }, { status: 400 })
+    }
 
     const result = await withTransaction(async (query) => {
       const distributorResult = await query<{ id: number }>`
@@ -82,10 +86,10 @@ export async function POST(
           const prRows = await query<{ id: number }>`
             INSERT INTO purchase_requests (
               pharmacy_id, distributor_id, total_amount, status,
-              is_out_of_stock_fulfillment, approved_by, created_at, updated_at
+              approved_by, created_at, updated_at
             ) VALUES (
-              ${req.pharmacy_id}, ${distributorId}, ${(req.unit_price || 0) * quantity_offered},
-              'APPROVED', true, 'distributor', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+              ${req.pharmacy_id}, ${distributorId}, ${Number(dm.unit_price) * quantity_offered},
+              'APPROVED', 'distributor', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             RETURNING id
           `
@@ -101,6 +105,15 @@ export async function POST(
               ${dm.medicine_id}, ${req.pharmacy_id}, ${distributorId},
               ${dm.batch_number}, ${dm.expiry_date}
             )
+          `
+
+          // Same invoice record the normal approve step creates, so the pharmacy can pay
+          // it and then publish the stock like any other purchase.
+          await query`
+            INSERT INTO purchase_invoices (request_id, invoice_number, payment_status)
+            VALUES (${purchaseRequestId},
+                    CONCAT('PR-', ${String(purchaseRequestId)}::text, '-', TO_CHAR(NOW(), 'YYYYMMDDHH24MISS')),
+                    'APPROVED_UNPAID')
           `
           createdProcurementRequest = true
         }

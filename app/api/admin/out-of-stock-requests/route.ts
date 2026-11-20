@@ -37,22 +37,24 @@ export async function GET(request: NextRequest) {
             osr.updated_at,
             osr.fulfilled_at,
             pp.pharmacy_name,
-            pp.contact_person,
-            pp.phone,
-            dp.distributor_name,
-            dp.contact_person as distributor_contact,
-            m.medicine_name,
+            pu.full_name AS contact_person,
+            pu.phone,
+            dp.company_name AS distributor_name,
+            du.full_name AS distributor_contact,
+            m.name AS medicine_name,
             m.generic_name,
             m.manufacturer
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
+          LEFT JOIN users pu ON pu.id = pp.user_id
+          LEFT JOIN users du ON du.id = dp.user_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           WHERE (${status === undefined || status === null || status === "all"} OR osr.status = ${status})
             AND (${searchParam === null} OR (
               LOWER(pp.pharmacy_name) LIKE ${searchParam}
-              OR LOWER(m.medicine_name) LIKE ${searchParam}
-              OR LOWER(dp.distributor_name) LIKE ${searchParam}
+              OR LOWER(m.name) LIKE ${searchParam}
+              OR LOWER(dp.company_name) LIKE ${searchParam}
             ))
           ORDER BY osr.created_at DESC
           LIMIT ${pageSize} OFFSET ${offset}
@@ -73,16 +75,18 @@ export async function GET(request: NextRequest) {
             osr.updated_at,
             osr.fulfilled_at,
             pp.pharmacy_name,
-            pp.contact_person,
-            pp.phone,
-            dp.distributor_name,
-            dp.contact_person as distributor_contact,
-            m.medicine_name,
+            pu.full_name AS contact_person,
+            pu.phone,
+            dp.company_name AS distributor_name,
+            du.full_name AS distributor_contact,
+            m.name AS medicine_name,
             m.generic_name,
             m.manufacturer
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
+          LEFT JOIN users pu ON pu.id = pp.user_id
+          LEFT JOIN users du ON du.id = dp.user_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           ORDER BY osr.created_at DESC
           LIMIT ${pageSize} OFFSET ${offset}
@@ -95,11 +99,13 @@ export async function GET(request: NextRequest) {
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
+          LEFT JOIN users pu ON pu.id = pp.user_id
+          LEFT JOIN users du ON du.id = dp.user_id
           WHERE (${status === undefined || status === null || status === "all"} OR osr.status = ${status})
             AND (${searchParam === null} OR (
               LOWER(pp.pharmacy_name) LIKE ${searchParam}
-              OR LOWER(m.medicine_name) LIKE ${searchParam}
-              OR LOWER(dp.distributor_name) LIKE ${searchParam}
+              OR LOWER(m.name) LIKE ${searchParam}
+              OR LOWER(dp.company_name) LIKE ${searchParam}
             ))
         `
       : await sql`
@@ -107,6 +113,8 @@ export async function GET(request: NextRequest) {
           LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
+          LEFT JOIN users pu ON pu.id = pp.user_id
+          LEFT JOIN users du ON du.id = dp.user_id
         `
 
     const total = countResult[0]?.total || 0

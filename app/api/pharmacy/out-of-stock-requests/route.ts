@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
             osr.notes,
             osr.created_at,
             osr.fulfilled_at,
-            dp.distributor_name,
-            m.medicine_name,
+            dp.company_name AS distributor_name,
+            m.name AS medicine_name,
             m.generic_name
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
             osr.notes,
             osr.created_at,
             osr.fulfilled_at,
-            dp.distributor_name,
-            m.medicine_name,
+            dp.company_name AS distributor_name,
+            m.name AS medicine_name,
             m.generic_name
           FROM medicine_out_of_stock_requests osr
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
@@ -114,23 +114,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const {
-      distributor_id,
-      medicine_id,
-      distributor_medicine_id,
-      requested_quantity,
-      mrp,
-      unit_price,
-      notes,
-    } = body
+    const { distributor_medicine_id, requested_quantity, notes } = body
 
     // Validate input
-    if (
-      !distributor_id ||
-      !medicine_id ||
-      !distributor_medicine_id ||
-      !requested_quantity
-    ) {
+    if (!distributor_medicine_id || !Number.isInteger(Number(requested_quantity)) || Number(requested_quantity) < 1) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -147,6 +134,19 @@ export async function POST(request: NextRequest) {
     }
 
     const pharmacyId = pharmacyResult[0].id
+
+    // Distributor, medicine and prices come from the stock row itself, never the client.
+    const [dm] = await sql`
+      SELECT distributor_id, medicine_id, mrp, unit_price
+      FROM distributor_medicines WHERE id = ${distributor_medicine_id}
+    ` as any[]
+    if (!dm) {
+      return NextResponse.json({ error: "Medicine not found" }, { status: 404 })
+    }
+    const medicine_id = dm.medicine_id
+    const distributor_id = dm.distributor_id
+    const mrp = dm.mrp
+    const unit_price = dm.unit_price
 
     // Check if pharmacy already has a pending/assigned request for this medicine
     const existingResult = await sql`

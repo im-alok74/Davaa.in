@@ -44,6 +44,8 @@ const AUTHENTICATED_PREFIXES = [
   "/api/prescriptions",
   "/profile",
   "/addresses",
+  "/wishlist",
+  "/api/wishlist",
   "/api/procurement",
 ]
 

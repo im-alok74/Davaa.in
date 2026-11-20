@@ -33,11 +33,11 @@ export async function POST(
     if (auto_assign && !distributor_id) {
       // Find distributors with this medicine in stock
       const distributorsResult = await sql`
-        SELECT DISTINCT d.id, d.distributor_name, COUNT(dm.id) as medicine_count
+        SELECT d.id, d.company_name AS distributor_name, COUNT(dm.id) as medicine_count
         FROM distributor_profiles d
         LEFT JOIN distributor_medicines dm ON d.id = dm.distributor_id
-        WHERE dm.medicine_id = ${req.medicine_id} AND dm.quantity > ${req.requested_quantity}
-        GROUP BY d.id, d.distributor_name
+        WHERE dm.medicine_id = ${req.medicine_id} AND d.verification_status = 'verified' AND (dm.quantity - dm.reserved_quantity) >= ${req.requested_quantity}
+        GROUP BY d.id, d.company_name
         ORDER BY medicine_count DESC
         LIMIT 1
       `

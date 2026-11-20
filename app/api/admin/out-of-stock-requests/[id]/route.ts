@@ -29,14 +29,14 @@ export async function GET(
         osr.updated_at,
         osr.fulfilled_at,
         pp.pharmacy_name,
-        pp.contact_person,
-        pp.phone,
-        pp.email,
-        dp.distributor_name,
-        dp.contact_person as distributor_contact,
-        dp.phone as distributor_phone,
-        dp.email as distributor_email,
-        m.medicine_name,
+        pu.full_name AS contact_person,
+        pu.phone,
+        pu.email,
+        dp.company_name AS distributor_name,
+        du.full_name AS distributor_contact,
+        dp.phone_number AS distributor_phone,
+        du.email AS distributor_email,
+        m.name AS medicine_name,
         m.generic_name,
         m.manufacturer,
         dm.batch_number,
@@ -45,6 +45,8 @@ export async function GET(
       FROM medicine_out_of_stock_requests osr
       LEFT JOIN pharmacy_profiles pp ON osr.pharmacy_id = pp.id
       LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
+      LEFT JOIN users pu ON pu.id = pp.user_id
+      LEFT JOIN users du ON du.id = dp.user_id
       LEFT JOIN medicines m ON osr.medicine_id = m.id
       LEFT JOIN distributor_medicines dm ON osr.distributor_medicine_id = dm.id
       WHERE osr.id = ${id}

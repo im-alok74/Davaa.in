@@ -29,7 +29,7 @@ export async function PATCH(
       SET verification_status = ${verificationStatus},
           verification_notes = COALESCE(${notes ?? null}, verification_notes),
           verified_at = CASE WHEN ${verificationStatus} = 'verified' THEN NOW() ELSE NULL END,
-          verified_by = CASE WHEN ${verificationStatus} = 'verified' THEN ${admin.id} ELSE NULL END,
+          verified_by = CASE WHEN ${verificationStatus} = 'verified' THEN ${admin.id}::int ELSE NULL END,
           updated_at = NOW()
       WHERE id = ${pharmacyId}
       RETURNING id, verification_status

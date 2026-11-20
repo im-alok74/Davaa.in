@@ -14,13 +14,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       distributorMedicineId,
-      distributorId,
-      medicineId,
+
       requestedQuantity = 1,
       notes = "",
     } = body
 
-    if (!distributorMedicineId || !distributorId || !medicineId) {
+    if (!distributorMedicineId) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // Get distributor medicine details for pricing
     const dmedicine = await sql`
-      SELECT mrp, unit_price FROM distributor_medicines WHERE id = ${distributorMedicineId}
+      SELECT mrp, unit_price, distributor_id, medicine_id FROM distributor_medicines WHERE id = ${distributorMedicineId}
     `
 
     if (dmedicine.length === 0) {
@@ -53,7 +52,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { mrp, unit_price } = dmedicine[0] as any
+    // Distributor and medicine come from the stock row, never from the request body.
+    const { mrp, unit_price, distributor_id: distributorId, medicine_id: medicineId } = dmedicine[0] as any
 
     // Check if request already exists
     const existing = await sql`
