@@ -58,7 +58,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("[PHARMACY INVENTORY] Error deleting inventory item:", error)
     return NextResponse.json(
-      { error: "Failed to remove medicine", details: String(error) },
+      { error: "Failed to remove medicine" },
       { status: 500 }
     )
   }

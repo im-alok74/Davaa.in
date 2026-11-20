@@ -16,10 +16,10 @@ interface Distributor {
   id: number
   user_id: number
   company_name: string
-  license_number: string
+  business_license_number: string
   city: string
-  state: string
-  commission_rate: number
+  state_province: string
+
   verification_status: 'pending' | 'verified' | 'rejected'
   status: 'active' | 'inactive' | 'paused'
   full_name: string
@@ -126,7 +126,6 @@ export default async function AdminDistributorsPage() {
                       <TableHead className="px-4 py-3">Contact</TableHead>
                       <TableHead className="px-4 py-3">License</TableHead>
                       <TableHead className="px-4 py-3">Location</TableHead>
-                      <TableHead className="px-4 py-3">Commission</TableHead>
                       <TableHead className="px-4 py-3">Verification</TableHead>
                       <TableHead className="px-4 py-3">Status</TableHead>
                       <TableHead className="px-4 py-3">Actions</TableHead>
@@ -135,7 +134,7 @@ export default async function AdminDistributorsPage() {
                   <TableBody>
                     {distributors.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                           No distributors found
                         </TableCell>
                       </TableRow>
@@ -157,16 +156,13 @@ export default async function AdminDistributorsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="px-4 py-3">
-                            <code className="text-xs bg-muted px-2 py-1 rounded">{d.license_number}</code>
+                            <code className="text-xs bg-muted px-2 py-1 rounded">{d.business_license_number}</code>
                           </TableCell>
                           <TableCell className="px-4 py-3">
                             <div className="flex items-center gap-1 text-sm">
                               <MapPin className="h-4 w-4 text-muted-foreground" />
-                              {d.city}, {d.state}
+                              {d.city}, {d.state_province}
                             </div>
-                          </TableCell>
-                          <TableCell className="px-4 py-3">
-                            <span className="text-sm font-semibold">{d.commission_rate}%</span>
                           </TableCell>
                           <TableCell className="px-4 py-3">
                             <Badge
@@ -236,7 +232,7 @@ export default async function AdminDistributorsPage() {
                     <div className="flex items-start justify-between">
                       <div>
                         <h3 className="font-semibold text-sm">{d.company_name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">{d.license_number}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{d.business_license_number}</p>
                       </div>
                       <Badge
                         variant={
@@ -260,16 +256,12 @@ export default async function AdminDistributorsPage() {
                       <p className="text-muted-foreground break-all">{d.email}</p>
                       <p className="text-muted-foreground flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {d.city}, {d.state}
+                        {d.city}, {d.state_province}
                       </p>
                     </div>
 
                     {/* Stats */}
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Commission</p>
-                        <p className="font-semibold text-sm">{d.commission_rate}%</p>
-                      </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Status</p>
                         <Badge

@@ -97,7 +97,10 @@ export async function PATCH(
 
       const result = await sql`
         UPDATE distributor_profiles
-        SET verification_status = ${verification_status}
+        SET verification_status = ${verification_status},
+            verified_at = CASE WHEN ${verification_status} = 'verified' THEN NOW() ELSE NULL END,
+            verified_by = CASE WHEN ${verification_status} = 'verified' THEN ${user.id} ELSE NULL END,
+            updated_at = NOW()
         WHERE id = ${distributorId}
         RETURNING *
       `
@@ -116,12 +119,11 @@ export async function PATCH(
       UPDATE distributor_profiles
       SET 
         company_name = COALESCE(${company_name || null}, company_name),
-        gst_number = COALESCE(${gst_number || null}, gst_number),
-        address = COALESCE(${address || null}, address),
+        tax_id = COALESCE(${gst_number || null}, tax_id),
+        address_line1 = COALESCE(${address || null}, address_line1),
         city = COALESCE(${city || null}, city),
-        state = COALESCE(${state || null}, state),
-        pincode = COALESCE(${pincode || null}, pincode),
-        commission_rate = COALESCE(${commission_rate || null}, commission_rate)
+        state_province = COALESCE(${state || null}, state_province),
+        postal_code = COALESCE(${pincode || null}, postal_code)
       WHERE id = ${distributorId}
       RETURNING *
     `

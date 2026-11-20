@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("[DISTRIBUTOR PURCHASE REQUESTS] List error:", error)
     return NextResponse.json(
-      { error: "Failed to load purchase requests", details: String(error) },
+      { error: "Failed to load purchase requests" },
       { status: 500 }
     )
   }

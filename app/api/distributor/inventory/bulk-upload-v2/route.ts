@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
 import { sql } from "@/lib/db"
+import { clientKey, rateLimit } from "@/lib/rate-limit"
+import { tooManyRequests } from "@/lib/api-response"
 import * as XLSX from "xlsx"
 import { v2 as cloudinary } from "cloudinary"
 
@@ -75,6 +77,12 @@ function toIsoDate(value: unknown) {
 
   const str = String(value).trim()
   if (!str) return null
+
+  // Excel/CSV readers hand dates over as day-serials (e.g. 47027.23), and the row
+  // mapper stringifies them. Without this every sheet date fell through to null.
+  if (/^\d+(\.\d+)?$/.test(str) && Number(str) > 20000 && Number(str) < 80000) {
+    return new Date(Math.floor(Number(str) - 25569) * 86400000).toISOString().slice(0, 10)
+  }
 
   const dmy = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
   if (dmy) {
@@ -288,6 +296,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Each upload can be 2000 rows of fuzzy matching: cap it at 10 per hour per user.
+    const limit = rateLimit(clientKey(request as any, `bulk-upload:${user.id}`), 10, 60 * 60 * 1000)
+    if (!limit.allowed) return tooManyRequests(limit.retryAfter)
+
     const profile = await sql`
       SELECT id, verification_status
       FROM distributor_profiles
@@ -393,65 +405,32 @@ export async function POST(request: Request) {
 
         const resolvedMrp = mrp ?? unitPrice
 
-        const batchNumber = (row.batch_number || "").trim() || null
+        const batchNumber = (row.batch_number || "").trim() || "N/A"
         const amount = quantity * unitPrice
 
-        try {
-          await sql`
-            INSERT INTO distributor_medicines
-            (
-              distributor_id,
-              medicine_id,
-              batch_number,
-              mfg_date,
-              expiry_date,
-              mrp,
-              quantity,
-              unit_price,
-              amount,
-              hsn_code,
-              notes
-            )
-            VALUES
-            (
-              ${distributorId},
-              ${medicineId},
-              ${batchNumber},
-              ${mfgDate},
-              ${expiryDate},
-              ${resolvedMrp},
-              ${quantity},
-              ${unitPrice},
-              ${amount},
-              ${toText(row.hsn_code) ?? null},
-              ${(row.notes || "").trim() || null}
-            )
-          `
-        } catch (insertError: any) {
-          if (insertError.message?.includes("duplicate") || insertError.message?.includes("unique constraint")) {
-            const updated = await sql`
-              UPDATE distributor_medicines
-              SET quantity = quantity + ${quantity},
-                  amount = (quantity + ${quantity}) * unit_price,
-                  expiry_date = ${expiryDate},
-                  mrp = ${mrp},
-                  mfg_date = ${mfgDate},
-                  hsn_code = ${toText(row.hsn_code) ?? null},
-                  notes = ${(row.notes || "").trim() || null},
-                  updated_at = NOW()
-              WHERE distributor_id = ${distributorId}
-                AND medicine_id = ${medicineId}
-                AND batch_number IS NOT DISTINCT FROM ${batchNumber}
-              RETURNING id
-            `
-
-            if (updated.length === 0) {
-              throw new Error("Duplicate detected but batch update failed")
-            }
-          } else {
-            throw insertError
-          }
-        }
+        // Real upsert on (distributor_id, medicine_id, batch_number). Blank batches are
+        // normalized to 'N/A' above because NULL never equals NULL and would otherwise
+        // bypass the unique constraint, creating duplicate invisible rows.
+        await sql`
+          INSERT INTO distributor_medicines
+            (distributor_id, medicine_id, batch_number, mfg_date, expiry_date, mrp,
+             quantity, unit_price, amount, hsn_code, notes)
+          VALUES
+            (${distributorId}, ${medicineId}, ${batchNumber}, ${mfgDate}, ${expiryDate},
+             ${resolvedMrp}, ${quantity}, ${unitPrice}, ${amount},
+             ${toText(row.hsn_code) ?? null}, ${(row.notes || "").trim() || null})
+          ON CONFLICT (distributor_id, medicine_id, batch_number)
+          DO UPDATE SET
+            quantity = distributor_medicines.quantity + EXCLUDED.quantity,
+            unit_price = EXCLUDED.unit_price,
+            amount = (distributor_medicines.quantity + EXCLUDED.quantity) * EXCLUDED.unit_price,
+            expiry_date = EXCLUDED.expiry_date,
+            mrp = EXCLUDED.mrp,
+            mfg_date = EXCLUDED.mfg_date,
+            hsn_code = EXCLUDED.hsn_code,
+            notes = EXCLUDED.notes,
+            updated_at = NOW()
+        `
 
         successCount++
         uploadedMedicineIds.push(medicineId)

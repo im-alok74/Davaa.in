@@ -1,50 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/auth-server'
-import { sql } from '@/lib/db'
+import { NextRequest, NextResponse } from "next/server"
+import { requirePharmacyProfile } from "@/lib/auth-server"
+import { handleApiError } from "@/lib/api-response"
+import { withTransaction } from "@/lib/db"
+import { changeOrderStatus } from "@/lib/orders"
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ orderId: string }> }
+  _request: NextRequest,
+  { params }: { params: Promise<{ orderId: string }> },
 ) {
   try {
-    const user = await requireRole(['pharmacy'])
+    const { user, pharmacyId } = await requirePharmacyProfile()
 
     const orderId = Number((await params).orderId)
-    if (isNaN(orderId)) {
-      return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 })
+    if (!Number.isInteger(orderId)) {
+      return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
     }
 
-    // Verify the pharmacy owns this order
-    const orderCheck = await sql`
-      SELECT id FROM orders
-      WHERE id = ${orderId} AND pharmacy_id IN (SELECT id FROM pharmacy_profiles WHERE user_id = ${user.id})
-      LIMIT 1
-    `
+    const result = await withTransaction((query) =>
+      changeOrderStatus(query, { orderId, pharmacyId }, "confirmed", user.id),
+    )
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
-    if (orderCheck.length === 0) {
-      return NextResponse.json({ error: 'Order not found or unauthorized' }, { status: 404 })
-    }
-
-    // Update order status to 'confirmed'
-    await sql`
-      UPDATE orders
-      SET order_status = 'confirmed',
-      updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${orderId}
-    `
-
-    return NextResponse.json({
-      success: true,
-      message: `Order ${orderId} confirmed successfully`,
-    })
-  } catch (error: any) {
-    console.error('[v0] Error accepting order:', error)
-    if (error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (error.message === 'Forbidden') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    return NextResponse.json({ error: 'Failed to accept order' }, { status: 500 })
+    return NextResponse.json({ success: true, message: `Order ${orderId} confirmed successfully` })
+  } catch (error) {
+    return handleApiError(error, "pharmacy/orders accept")
   }
 }

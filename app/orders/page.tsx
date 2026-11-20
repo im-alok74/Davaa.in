@@ -125,7 +125,7 @@ export default async function OrdersPage() {
                               : "secondary"
                         }
                       >
-                        {order.order_status}
+                        <span className="capitalize">{String(order.order_status).replace(/_/g, " ")}</span>
                       </Badge>
                     </div>
                   </CardHeader>
@@ -179,7 +179,7 @@ export default async function OrdersPage() {
                           </div>
                         )}
 
-                        {(order.order_status === "delivered" || order.order_status === "confirmed") && (
+                        {order.order_status !== "cancelled" && (
                           <a href={`/api/orders/${order.order_number}/invoice`} target="_blank" rel="noopener noreferrer">
                             <Button variant="outline" className="w-full bg-transparent">
                               Download Invoice

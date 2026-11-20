@@ -174,7 +174,9 @@ export default async function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          <SettingsManager initialSettings={settings} />
+          <div id="settings" className="scroll-mt-20">
+            <SettingsManager initialSettings={settings} />
+          </div>
         </div>
       </div>
     </AdminLayout>

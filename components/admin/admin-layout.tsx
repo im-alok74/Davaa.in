@@ -90,7 +90,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="pt-4">
-            <Link href="/admin/settings">
+            <Link href="/admin#settings">
               <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl" size="sm">
                 <Settings className="h-4 w-4" />
                 Settings

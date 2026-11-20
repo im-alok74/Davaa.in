@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   } catch (error: any) {
     console.error('[PHARMACY MEDICINES] Error updating medicine:', error)
     return NextResponse.json(
-      { error: 'Failed to update medicine', details: String(error) },
+      { error: 'Failed to update medicine' },
       { status: 500 }
     )
   }
@@ -134,7 +134,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (error: any) {
     console.error('[PHARMACY MEDICINES] Error deleting medicine:', error)
     return NextResponse.json(
-      { error: 'Failed to delete medicine', details: String(error) },
+      { error: 'Failed to delete medicine' },
       { status: 500 }
     )
   }

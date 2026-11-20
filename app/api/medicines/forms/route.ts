@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest) {
   } catch (error: any) {
     console.error("[MEDICINE FORMS] Error:", error)
     return NextResponse.json(
-      { error: "Failed to load forms", details: String(error) },
+      { error: "Failed to load forms" },
       { status: 500 }
     )
   }

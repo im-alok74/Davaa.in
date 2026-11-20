@@ -345,7 +345,7 @@ export async function GET(
               <span>₹${Number(order.subtotal).toFixed(2)}</span>
             </div>
             <div class="summary-row">
-              <span>GST (5%):</span>
+              <span>GST:</span>
               <span>₹${gst.toFixed(2)}</span>
             </div>
             <div class="summary-row">

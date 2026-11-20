@@ -1,76 +1,32 @@
 import { revalidatePath } from "next/cache"
 import { NextResponse } from "next/server"
 import { requireRole } from "@/lib/auth-server"
+import { handleApiError } from "@/lib/api-response"
 import { withTransaction } from "@/lib/db"
-import { restoreStockForCancelledOrder } from "@/lib/orders"
+import { changeOrderStatus } from "@/lib/orders"
 
 export async function PATCH(
   request: Request,
-  { params }: { params: any }
+  { params }: { params: Promise<{ orderId: string }> },
 ) {
   try {
-    await requireRole(["admin"])
+    const admin = await requireRole(["admin"])
 
     const { status } = await request.json()
-
-    // `params` may be a Promise in some Next.js environments — unwrap if needed
-    const resolvedParams = typeof params?.then === "function" ? await params : params
-    const rawId = resolvedParams?.orderId
+    const rawId = (await params).orderId
     const numericId = Number(rawId)
 
-    // Determine whether the caller provided a numeric DB id or an order_number string
-    const isNumericId = !isNaN(numericId)
+    // Accepts either the numeric DB id or the order_number string.
+    const target = Number.isInteger(numericId) ? { orderId: numericId } : { orderNumber: rawId }
 
-    const allowedStatuses = [
-      "pending",
-      "confirmed",
-      "preparing",
-      "out_for_delivery",
-      "delivered",
-      "cancelled",
-    ]
+    const result = await withTransaction((query) =>
+      changeOrderStatus(query, target, String(status), admin.id),
+    )
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
-    if (!allowedStatuses.includes(status)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 })
-    }
-
-    const updatedId = await withTransaction(async (query) => {
-      const [existing] = isNumericId
-        ? await query<{ id: number; order_status: string }>`
-            SELECT id, order_status FROM orders WHERE id = ${numericId}
-          `
-        : await query<{ id: number; order_status: string }>`
-            SELECT id, order_status FROM orders WHERE order_number = ${rawId}
-          `
-      if (!existing) return null
-
-      if (status === "cancelled" && existing.order_status !== "cancelled") {
-        await restoreStockForCancelledOrder(query, existing.id)
-      }
-
-      await query`
-        UPDATE orders SET order_status = ${status}, updated_at = NOW() WHERE id = ${existing.id}
-      `
-      return existing.id
-    })
-
-    if (updatedId === null) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 })
-    }
-
-    try {
-      revalidatePath("/admin/orders")
-    } catch (e) {
-      // revalidatePath can be optional; log but don't fail the request
-      console.error("[ADMIN ORDERS] revalidatePath failed:", e)
-    }
-
+    revalidatePath("/admin/orders")
     return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error("[ADMIN ORDERS] Update error:", error)
-    if (error?.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } catch (error) {
+    return handleApiError(error, "admin/orders PATCH")
   }
 }

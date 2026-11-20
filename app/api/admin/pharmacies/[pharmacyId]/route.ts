@@ -1,51 +1,52 @@
-import { revalidatePath } from 'next/cache'
-import { getCurrentUser } from "@/lib/auth-server"
+import { revalidatePath } from "next/cache"
+import { NextResponse, type NextRequest } from "next/server"
+import { z } from "zod"
+import { requireRole } from "@/lib/auth-server"
+import { handleApiError } from "@/lib/api-response"
 import { sql } from "@/lib/db"
-import { NextResponse, NextRequest } from "next/server"
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ pharmacyId: string }> }) {
+const BodySchema = z.object({
+  verificationStatus: z.enum(["pending", "verified", "rejected"]),
+  notes: z.string().trim().max(500).optional(),
+})
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ pharmacyId: string }> },
+) {
   try {
-    const user = await getCurrentUser()
-    console.log("[admin] Pharmacy - User:", user?.id, "Type:", user?.user_type)
-    
-    if (!user || user.user_type !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const admin = await requireRole(["admin"])
+
+    const pharmacyId = Number((await params).pharmacyId)
+    if (!Number.isInteger(pharmacyId)) {
+      return NextResponse.json({ error: "Invalid pharmacy ID" }, { status: 400 })
     }
 
-    // Await params if it's a Promise (Next.js runtime behavior)
-    const resolvedParams = await Promise.resolve(params)
-    const pharmacyId = Number(resolvedParams.pharmacyId)
-    console.log("[admin] Resolved pharmacyId:", pharmacyId, "raw:", resolvedParams.pharmacyId)
-    
-    if (isNaN(pharmacyId)) {
-      return NextResponse.json({ error: 'Invalid pharmacy ID' }, { status: 400 })
-    }
+    const { verificationStatus, notes } = BodySchema.parse(await request.json())
 
-    const { verificationStatus } = await request.json()
-    console.log("[admin] Updating pharmacy", pharmacyId, "to status:", verificationStatus)
-
-    const result = await sql`
+    const result = (await sql`
       UPDATE pharmacy_profiles
-      SET verification_status = ${verificationStatus}
+      SET verification_status = ${verificationStatus},
+          verification_notes = COALESCE(${notes ?? null}, verification_notes),
+          verified_at = CASE WHEN ${verificationStatus} = 'verified' THEN NOW() ELSE NULL END,
+          verified_by = CASE WHEN ${verificationStatus} = 'verified' THEN ${admin.id} ELSE NULL END,
+          updated_at = NOW()
       WHERE id = ${pharmacyId}
       RETURNING id, verification_status
-    ` as any[]
+    `) as Array<{ id: number; verification_status: string }>
+
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Pharmacy not found" }, { status: 404 })
+    }
 
     revalidatePath("/admin/pharmacies")
 
-    console.log("[admin] Update result:", result, "length:", result?.length)
-
-    if (!result || result.length === 0) {
-      return NextResponse.json({ error: "Pharmacy not found or update failed" }, { status: 404 })
-    }
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       pharmacy: result[0],
-      message: `Pharmacy successfully ${verificationStatus}`
+      message: `Pharmacy successfully ${verificationStatus}`,
     })
   } catch (error) {
-    console.error("[admin] Update pharmacy status error:", error)
-    return NextResponse.json({ error: "Internal server error", details: String(error) }, { status: 500 })
+    return handleApiError(error, "admin/pharmacies PATCH")
   }
 }

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -28,6 +28,9 @@ export function PharmacyRegisterForm() {
     is24x7: false,
   })
   const [isLoading, setIsLoading] = useState(false)
+  // The account is created before the profile. If the profile step fails (e.g. a duplicate
+  // licence number) the user is already signed in, so a retry must not sign up again.
+  const accountCreated = useRef(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -37,21 +40,24 @@ export function PharmacyRegisterForm() {
 
     try {
       // First, create user account
-      const userResponse = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          fullName: formData.fullName,
-          phone: formData.phone,
-          userType: "pharmacy",
-        }),
-      })
+      const userResponse = accountCreated.current
+        ? { ok: true as const }
+        : await fetch("/api/auth/signup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: formData.email,
+              password: formData.password,
+              fullName: formData.fullName,
+              phone: formData.phone,
+              userType: "pharmacy",
+            }),
+          })
 
-      const userData = await userResponse.json()
+      const userData: { error?: string } = "json" in userResponse ? await userResponse.json() : {}
 
       if (userResponse.ok) {
+        accountCreated.current = true
         // Then create pharmacy profile
         const profileResponse = await fetch("/api/pharmacy/profile", {
           method: "POST",
@@ -76,9 +82,10 @@ export function PharmacyRegisterForm() {
           router.push("/pharmacy/dashboard")
           router.refresh()
         } else {
+          const profileError = await profileResponse.json().catch(() => ({}))
           toast({
             title: "Error",
-            description: "Failed to create pharmacy profile",
+            description: profileError.error || "Failed to create pharmacy profile",
             variant: "destructive",
           })
         }

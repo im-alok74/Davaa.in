@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
 import { sql } from "@/lib/db"
+import { handleApiError } from "@/lib/api-response"
 
 const DEFAULT_PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 60
@@ -58,8 +59,9 @@ export async function GET(request: NextRequest) {
       FROM distributor_medicines dm
       JOIN distributor_profiles dp ON dm.distributor_id = dp.id
       JOIN medicines m ON dm.medicine_id = m.id
-      WHERE (
-          ((dm.quantity - dm.reserved_quantity) > 0 AND dm.expiry_date > NOW())
+      WHERE dp.verification_status = 'verified'
+        AND (
+          ((dm.quantity - dm.reserved_quantity) > 0 AND dm.expiry_date >= CURRENT_DATE)
           OR (${includeOutOfStock} AND (dm.quantity - dm.reserved_quantity) <= 0)
         )
         AND (${query === ""} OR (
@@ -101,11 +103,7 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ items, page, limit, hasMore })
-  } catch (error: any) {
-    console.error("[PROCUREMENT INVENTORY] Error:", error)
-    return NextResponse.json(
-      { error: "Failed to load procurement inventory", details: String(error) },
-      { status: 500 }
-    )
+  } catch (error) {
+    return handleApiError(error, "procurement/inventory")
   }
 }

@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { z } from "zod"
+import { requirePharmacyProfile } from "@/lib/auth-server"
+import { handleApiError } from "@/lib/api-response"
 import { sql } from "@/lib/db"
+import { createPurchaseRequest } from "@/lib/purchase-requests"
 
 // List purchase requests for current pharmacy
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || user.user_type !== "pharmacy") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const pharmacyRows = await sql`
-      SELECT id FROM pharmacy_profiles WHERE user_id = ${user.id}
-    `
-
-    if (!pharmacyRows.length) {
-      return NextResponse.json({ error: "Pharmacy profile not found" }, { status: 404 })
-    }
-
-    const pharmacyId = (pharmacyRows[0] as any).id
+    const { pharmacyId } = await requirePharmacyProfile()
 
     const requests = await sql`
       SELECT
@@ -55,153 +44,47 @@ export async function GET(request: NextRequest) {
     `
 
     return NextResponse.json({ requests })
-  } catch (error: any) {
-    console.error("[PROCUREMENT REQUESTS] List error:", error)
-    return NextResponse.json(
-      { error: "Failed to load purchase requests", details: String(error) },
-      { status: 500 }
-    )
+  } catch (error) {
+    return handleApiError(error, "procurement/purchase-requests GET")
   }
 }
 
-// Create a new purchase request and atomically reserve stock
+const CreateSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        distributorMedicineId: z.coerce.number().int().positive(),
+        quantity: z.coerce.number().int().positive().max(100_000),
+      }),
+    )
+    .min(1, "No items provided")
+    .max(200),
+  notes: z.string().trim().max(1000).optional(),
+})
+
+// Create a new purchase request and atomically reserve stock for every line
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
+    const { pharmacyId } = await requirePharmacyProfile()
 
-    if (!user || user.user_type !== "pharmacy") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Only an approved pharmacy may buy wholesale.
+    const [profile] = (await sql`
+      SELECT verification_status FROM pharmacy_profiles WHERE id = ${pharmacyId}
+    `) as Array<{ verification_status: string }>
+    if (profile?.verification_status !== "verified") {
+      return NextResponse.json(
+        { error: "Your pharmacy must be verified before it can place purchase requests" },
+        { status: 403 },
+      )
     }
 
-    const pharmacyRows = await sql`
-      SELECT id FROM pharmacy_profiles WHERE user_id = ${user.id}
-    `
+    const { items, notes } = CreateSchema.parse(await request.json())
 
-    if (!pharmacyRows.length) {
-      return NextResponse.json({ error: "Pharmacy profile not found" }, { status: 404 })
-    }
-    const pharmacyId = (pharmacyRows[0] as any).id
+    const result = await createPurchaseRequest(pharmacyId, items, notes || null)
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
-    const body = await request.json()
-    const { items, notes } = body as {
-      items: { distributorMedicineId: number; quantity: number }[]
-      notes?: string
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "No items provided" }, { status: 400 })
-    }
-
-    // Reserve stock per item using an atomic UPDATE that prevents overselling
-    let totalAmount = 0
-    let distributorId: number | null = null
-    const reservedItems: {
-      distributorMedicineId: number
-      quantity: number
-      price: number
-      lineTotal: number
-      snapshot: any
-    }[] = []
-
-    for (const item of items) {
-      const qty = Number(item.quantity)
-      if (!item.distributorMedicineId || !qty || qty <= 0) {
-        return NextResponse.json({ error: "Invalid item payload" }, { status: 400 })
-      }
-
-      const rows = await sql`
-        UPDATE distributor_medicines
-        SET reserved_quantity = reserved_quantity + ${qty}
-        WHERE id = ${item.distributorMedicineId}
-          AND (quantity - reserved_quantity) >= ${qty}
-        RETURNING *,
-          (quantity - reserved_quantity) AS remaining_available
-      `
-
-      if (!rows.length) {
-        return NextResponse.json(
-          { error: "Insufficient stock for one or more items" },
-          { status: 409 }
-        )
-      }
-
-      const dm = rows[0] as any
-      if (distributorId === null) {
-        distributorId = Number(dm.distributor_id)
-      } else if (Number(dm.distributor_id) !== distributorId) {
-        // Release the reservation we just made for this item before returning
-        await sql`
-          UPDATE distributor_medicines
-          SET reserved_quantity = GREATEST(reserved_quantity - ${qty}, 0)
-          WHERE id = ${item.distributorMedicineId}
-        `
-        return NextResponse.json(
-          { error: "A single purchase request must contain items from only one distributor" },
-          { status: 400 }
-        )
-      }
-      const price = Number(dm.unit_price)
-      const lineTotal = price * qty
-      totalAmount += lineTotal
-
-      reservedItems.push({
-        distributorMedicineId: dm.id,
-        quantity: qty,
-        price,
-        lineTotal,
-        snapshot: dm,
-      })
-    }
-
-    // Create purchase_request
-    const expiresAtRows = await sql`SELECT NOW() + INTERVAL '30 minutes' AS expires_at`
-    const expiresAt = (expiresAtRows[0] as any).expires_at
-
-    const prRows = await sql`
-      INSERT INTO purchase_requests (pharmacy_id, distributor_id, status, total_amount, notes, expires_at)
-      VALUES (${pharmacyId}, ${distributorId}, 'PENDING', ${totalAmount}, ${notes || null}, ${expiresAt})
-      RETURNING *
-    `
-    const pr = prRows[0] as any
-
-    // Insert purchase_items with snapshot data
-    for (const item of reservedItems) {
-      const dm = item.snapshot
-      await sql`
-        INSERT INTO purchase_items (
-          request_id,
-          distributor_medicine_id,
-          quantity,
-          price,
-          line_total,
-          medicine_id,
-          pharmacy_id,
-          distributor_id,
-          batch_number,
-          expiry_date
-        )
-        VALUES (
-          ${pr.id},
-          ${item.distributorMedicineId},
-          ${item.quantity},
-          ${item.price},
-          ${item.lineTotal},
-          ${dm.medicine_id},
-          ${pharmacyId},
-          ${dm.distributor_id},
-          ${dm.batch_number},
-          ${dm.expiry_date}
-        )
-      `
-    }
-
-    return NextResponse.json({ success: true, request: pr })
-  } catch (error: any) {
-    console.error("[PROCUREMENT REQUESTS] Create error:", error)
-    return NextResponse.json(
-      { error: "Failed to create purchase request", details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ success: true, request: result.request })
+  } catch (error) {
+    return handleApiError(error, "procurement/purchase-requests POST")
   }
 }
-

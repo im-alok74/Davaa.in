@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[PHARMACY MEDICINES] Error fetching medicines:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch medicines', details: String(error) },
+      { error: 'Failed to fetch medicines' },
       { status: 500 }
     )
   }
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('[PHARMACY MEDICINES] Error adding medicine:', error)
     return NextResponse.json(
-      { error: 'Failed to add medicine', details: String(error) },
+      { error: 'Failed to add medicine' },
       { status: 500 }
     )
   }

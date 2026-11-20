@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Failed to update user', details: String(error) }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
   }
 }
 
@@ -174,6 +174,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Failed to delete user', details: String(error) }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 })
   }
 }

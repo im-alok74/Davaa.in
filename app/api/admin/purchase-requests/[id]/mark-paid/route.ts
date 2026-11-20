@@ -49,7 +49,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("[ADMIN PURCHASE REQUESTS] Mark paid error:", error)
     return NextResponse.json(
-      { error: "Failed to mark request as paid", details: String(error) },
+      { error: "Failed to mark request as paid" },
       { status: 500 }
     )
   }

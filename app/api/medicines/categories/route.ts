@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest) {
   } catch (error: any) {
     console.error("[MEDICINE CATEGORIES] Error:", error)
     return NextResponse.json(
-      { error: "Failed to load categories", details: String(error) },
+      { error: "Failed to load categories" },
       { status: 500 }
     )
   }

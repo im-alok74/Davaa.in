@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db"
+import { sql, withTransaction } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
     // Check if email already exists
     const existingEmail = await sql`
-      SELECT id FROM users WHERE email = ${email}
+      SELECT id FROM users WHERE LOWER(email) = LOWER(${email})
     `
 
     if (existingEmail.length > 0) {
@@ -121,26 +121,26 @@ export async function POST(request: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Create user
-    const userResult = await sql`
-      INSERT INTO users (email, password_hash, full_name, phone, user_type)
-      VALUES (${email}, ${passwordHash}, ${fullName}, ${phone}, 'distributor')
-      RETURNING id, email, full_name, phone, user_type, status
-    `
-
-    const user = userResult[0]
-    const userId = user.id
-
-    // Create distributor profile
     const deliveryRadius = parseInt(serviceAreas) || 50 // Default 50km
 
-    const distributorResult = await sql`
-      INSERT INTO distributor_profiles 
-      (user_id, company_name, business_license_number, tax_id, phone_number, address_line1, city, state_province, postal_code, country, delivery_radius_km, verification_status)
-      VALUES 
-      (${userId}, ${companyName}, ${licenseNumber}, ${gstNumber}, ${phone}, ${streetAddress}, ${city}, ${state}, ${pincode}, 'India', ${deliveryRadius}, 'pending')
-      RETURNING id
-    `
+    // User + profile are one unit: a failure on the profile (e.g. a racing duplicate
+    // licence) used to leave a distributor user with no profile that could never retry.
+    const { user, distributorResult } = await withTransaction(async (query) => {
+      const [createdUser] = await query<Record<string, any>>`
+        INSERT INTO users (email, password_hash, full_name, phone, user_type)
+        VALUES (${String(email).trim().toLowerCase()}, ${passwordHash}, ${fullName}, ${phone}, 'distributor')
+        RETURNING id, email, full_name, phone, user_type, status
+      `
+      const profileRows = await query<Record<string, any>>`
+        INSERT INTO distributor_profiles
+        (user_id, company_name, business_license_number, tax_id, phone_number, address_line1, city, state_province, postal_code, country, delivery_radius_km, verification_status)
+        VALUES
+        (${createdUser.id}, ${companyName}, ${licenseNumber}, ${gstNumber}, ${phone}, ${streetAddress}, ${city}, ${state}, ${pincode}, 'India', ${deliveryRadius}, 'pending')
+        RETURNING id
+      `
+      return { user: createdUser, distributorResult: profileRows }
+    })
+    const userId = user.id
 
     // Create session
     const sessionToken = generateSessionToken()

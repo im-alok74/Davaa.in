@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("[PHARMACY INVENTORY] Error fetching inventory:", error)
     return NextResponse.json(
-      { error: "Failed to fetch inventory", details: String(error) },
+      { error: "Failed to fetch inventory" },
       { status: 500 }
     )
   }

@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("[MEDICINE IMAGE UPLOAD] Error:", error)
     return NextResponse.json(
-      { error: "Failed to upload image", details: String(error) },
+      { error: "Failed to upload image" },
       { status: 500 }
     )
   }

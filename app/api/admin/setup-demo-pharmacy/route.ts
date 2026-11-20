@@ -149,7 +149,7 @@ export async function POST() {
   } catch (error) {
     console.error('[demo] Demo pharmacy setup error:', error)
     return NextResponse.json(
-      { error: 'Failed to setup demo pharmacy', details: String(error) },
+      { error: 'Failed to setup demo pharmacy' },
       { status: 500 }
     )
   }
