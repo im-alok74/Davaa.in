@@ -152,7 +152,9 @@ export function DistributorSignUpForm() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name } = e.target
+    // CSS text-transform only changes how GST looks; the stored value stayed lowercase and failed the regex.
+    const value = name === "gstNumber" ? e.target.value.replace(/\s/g, "").toUpperCase() : e.target.value
     setFormData((prev) => ({
       ...prev,
       [name]: value,

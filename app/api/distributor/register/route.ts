@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       phone,
       companyName,
       licenseNumber,
-      gstNumber,
+      gstNumber: rawGstNumber,
       streetAddress,
       landmark,
       city,
@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       pincode,
       serviceAreas,
     } = body
+
+    const gstNumber = String(rawGstNumber ?? "").replace(/\s/g, "").toUpperCase()
 
     // Validation
     if (!email || !password || !fullName || !phone) {
