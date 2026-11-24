@@ -7,7 +7,10 @@ import { withTransaction } from "@/lib/db"
 const BodySchema = z.object({
   pricingMode: z.enum(["mrp", "mrp_discount", "custom"]).default("mrp"),
   discountPercentage: z.coerce.number().min(0).max(100).default(0),
-  customSellingPrice: z.coerce.number().positive().optional(),
+  customSellingPrice: z.preprocess(
+    (value) => (value === null || value === "" || value === undefined ? undefined : value),
+    z.coerce.number().finite().positive().optional(),
+  ),
 })
 
 // Pharmacy: publish PAID procurement stock to website inventory (pharmacy_inventory)
@@ -54,9 +57,14 @@ export async function POST(
         expiry_date: string | null
         mrp: string | null
       }>`
-        SELECT pi.medicine_id, pi.quantity, pi.price, pi.batch_number, pi.expiry_date, m.mrp
+        SELECT COALESCE(pi.medicine_id, dm.medicine_id) AS medicine_id,
+               pi.quantity, pi.price,
+               COALESCE(pi.batch_number, dm.batch_number) AS batch_number,
+               COALESCE(pi.expiry_date, dm.expiry_date) AS expiry_date,
+               m.mrp
         FROM purchase_items pi
-        JOIN medicines m ON m.id = pi.medicine_id
+        LEFT JOIN distributor_medicines dm ON dm.id = pi.distributor_medicine_id
+        JOIN medicines m ON m.id = COALESCE(pi.medicine_id, dm.medicine_id)
         WHERE pi.request_id = ${requestId}
       `
 
@@ -66,9 +74,9 @@ export async function POST(
         let sellingPrice = Number(item.price)
         let discountToStore = 0
         if (body.pricingMode === "mrp") {
-          sellingPrice = mrp
+          sellingPrice = mrp > 0 ? mrp : Number(item.price)
         } else if (body.pricingMode === "mrp_discount") {
-          sellingPrice = mrp
+          sellingPrice = mrp > 0 ? mrp : Number(item.price)
           discountToStore = body.discountPercentage
         } else if (body.customSellingPrice !== undefined) {
           sellingPrice = body.customSellingPrice
