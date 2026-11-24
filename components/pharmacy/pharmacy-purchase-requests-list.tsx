@@ -44,6 +44,7 @@ export function PharmacyPurchaseRequestsList() {
   const [pricingMode, setPricingMode] = useState<"mrp" | "mrp_discount" | "custom">("mrp")
   const [discountPercentage, setDiscountPercentage] = useState("5")
   const [customSellingPrice, setCustomSellingPrice] = useState("")
+  const [isPublishing, setIsPublishing] = useState(false)
   const { toast } = useToast()
 
   const fetchRequests = async () => {
@@ -302,8 +303,10 @@ export function PharmacyPurchaseRequestsList() {
               Cancel
             </Button>
             <Button
+              disabled={isPublishing || (pricingMode === "custom" && !customSellingPrice)}
               onClick={async () => {
                 if (!publishingRequestId) return
+                setIsPublishing(true)
                 try {
                   const res = await fetch(
                     `/api/pharmacy/purchase-requests/${publishingRequestId}/publish`,
@@ -313,7 +316,9 @@ export function PharmacyPurchaseRequestsList() {
                       body: JSON.stringify({
                         pricingMode,
                         discountPercentage: Number(discountPercentage || 0),
-                        customSellingPrice: customSellingPrice ? Number(customSellingPrice) : null,
+                        ...(pricingMode === "custom"
+                          ? { customSellingPrice: Number(customSellingPrice) }
+                          : {}),
                       }),
                     }
                   )
@@ -339,10 +344,12 @@ export function PharmacyPurchaseRequestsList() {
                     description: "Something went wrong",
                     variant: "destructive",
                   })
+                } finally {
+                  setIsPublishing(false)
                 }
               }}
             >
-              Publish
+              {isPublishing ? "Publishing..." : "Publish"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -350,4 +357,3 @@ export function PharmacyPurchaseRequestsList() {
     </Tabs>
   )
 }
-
