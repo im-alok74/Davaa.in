@@ -220,6 +220,14 @@ export async function POST(request: Request) {
           SELECT id FROM medicines WHERE id = ${resolvedMedicineId}
         `
         if (medicine.length === 0) resolvedMedicineId = null
+        else {
+          await query`
+            UPDATE medicines
+            SET mrp = ${Number(mrp)}
+            WHERE id = ${resolvedMedicineId}
+              AND ${Number(mrp) > 0}
+          `
+        }
       }
 
       if (!resolvedMedicineId) {

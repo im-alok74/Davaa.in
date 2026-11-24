@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       mrp,
       quantity,
       unitPrice,
+      sellingPrice,
       imageUrl,
       notes
     } = body
@@ -110,8 +111,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const mrpNumber = parseFloat(mrp)
+    const purchaseCostNumber = parseFloat(unitPrice)
+    const requestedSellingPrice = sellingPrice === undefined || sellingPrice === null || sellingPrice === ''
+      ? mrpNumber
+      : parseFloat(sellingPrice)
+
+    if (
+      !Number.isFinite(mrpNumber) ||
+      mrpNumber <= 0 ||
+      !Number.isFinite(purchaseCostNumber) ||
+      purchaseCostNumber <= 0 ||
+      !Number.isFinite(requestedSellingPrice) ||
+      requestedSellingPrice <= 0
+    ) {
+      return NextResponse.json({ error: 'MRP, purchase cost, and selling price must be valid positive prices' }, { status: 400 })
+    }
+
+    if (requestedSellingPrice > mrpNumber) {
+      return NextResponse.json({ error: `Selling price cannot exceed MRP (₹${mrpNumber.toFixed(2)})` }, { status: 400 })
+    }
+
     // Calculate amount
-    const amount = parseFloat(quantity) * parseFloat(unitPrice)
+    const amount = parseFloat(quantity) * purchaseCostNumber
 
     // A blank batch number must normalize to the same real value everywhere it's used
     // as part of a (pharmacy_id, medicine_id, batch_number) unique key — NULL is never
@@ -135,6 +157,11 @@ export async function POST(request: NextRequest) {
 
       if (existingMedicine.length > 0) {
         medicineId = existingMedicine[0].id
+        await query`
+          UPDATE medicines
+          SET mrp = ${mrpNumber}
+          WHERE id = ${medicineId} AND ${mrpNumber} > 0
+        `
       } else {
         const newMedicine = await query<{ id: number }>`
           INSERT INTO medicines (name, generic_name, manufacturer, hsn_code, mfg_date, mrp, image_url)
@@ -179,16 +206,18 @@ export async function POST(request: NextRequest) {
           selling_price,
           discount_percentage,
           batch_number,
-          expiry_date
+          expiry_date,
+          mrp
         )
         VALUES (
           ${pharmacyId},
           ${medicineId},
           ${quantity},
-          ${unitPrice},
+          ${requestedSellingPrice},
           0,
           ${normalizedBatchNumber},
-          ${expiryDate}
+          ${expiryDate},
+          ${mrpNumber}
         )
         ON CONFLICT (pharmacy_id, medicine_id, batch_number)
         DO UPDATE SET
@@ -196,6 +225,7 @@ export async function POST(request: NextRequest) {
           selling_price = EXCLUDED.selling_price,
           discount_percentage = EXCLUDED.discount_percentage,
           expiry_date = COALESCE(EXCLUDED.expiry_date, pharmacy_inventory.expiry_date),
+          mrp = COALESCE(EXCLUDED.mrp, pharmacy_inventory.mrp),
           last_updated = CURRENT_TIMESTAMP
       `
 
@@ -215,4 +245,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

@@ -61,7 +61,7 @@ export async function POST(
                pi.quantity, pi.price,
                COALESCE(pi.batch_number, dm.batch_number) AS batch_number,
                COALESCE(pi.expiry_date, dm.expiry_date) AS expiry_date,
-               m.mrp
+               COALESCE(dm.mrp, m.mrp, 0) AS mrp
         FROM purchase_items pi
         LEFT JOIN distributor_medicines dm ON dm.id = pi.distributor_medicine_id
         JOIN medicines m ON m.id = COALESCE(pi.medicine_id, dm.medicine_id)
@@ -91,6 +91,14 @@ export async function POST(
         // Same NULL-batch trap as distributor inventory: NULL never equals NULL, so a
         // blank batch would dodge the unique key and create a duplicate row per publish.
         const batch = (item.batch_number || "").trim() || "N/A"
+
+        if (mrp > 0) {
+          await query`
+            UPDATE medicines
+            SET mrp = ${mrp}
+            WHERE id = ${item.medicine_id}
+          `
+        }
 
         await query`
           INSERT INTO pharmacy_inventory (

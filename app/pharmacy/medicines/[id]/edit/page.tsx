@@ -36,12 +36,25 @@ async function updateMedicine(formData: FormData) {
   try {
     // Verify ownership
     const inventory = await sql`
-      SELECT id FROM pharmacy_inventory
-      WHERE id = ${inventoryId} AND pharmacy_id = ${(profile as any).id}
+      SELECT pi.id, COALESCE(pi.mrp, m.mrp) AS mrp
+      FROM pharmacy_inventory pi
+      JOIN medicines m ON m.id = pi.medicine_id
+      WHERE pi.id = ${inventoryId} AND pi.pharmacy_id = ${(profile as any).id}
     `
 
     if (inventory.length === 0) {
       throw new Error('Medicine not found or unauthorized')
+    }
+
+    const applicableMrp = Number(inventory[0].mrp ?? 0)
+    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+      throw new Error('Selling price must be greater than zero')
+    }
+    if (applicableMrp > 0 && sellingPrice > applicableMrp) {
+      throw new Error(`Selling price cannot exceed MRP (₹${applicableMrp.toFixed(2)})`)
+    }
+    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+      throw new Error('Stock quantity cannot be negative')
     }
 
     await sql`
@@ -94,7 +107,7 @@ export default async function EditMedicinePage({
       m.manufacturer,
       m.category,
       m.strength,
-      m.mrp
+      COALESCE(pi.mrp, m.mrp) AS mrp
     FROM pharmacy_inventory pi
     JOIN medicines m ON pi.medicine_id = m.id
     WHERE pi.id = ${inventoryId} AND pi.pharmacy_id = ${(profile as any).id}
@@ -178,6 +191,7 @@ export default async function EditMedicinePage({
                       required
                       step='0.01'
                       min='0'
+                      max={medicine.mrp > 0 ? Number(medicine.mrp).toFixed(2) : undefined}
                       defaultValue={Number(medicine.selling_price).toFixed(2)}
                     />
                   </div>

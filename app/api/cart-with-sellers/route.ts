@@ -37,7 +37,8 @@ export async function GET() {
         SELECT 
           pi.id as inventory_id,
           pi.pharmacy_id,
-          pi.selling_price,
+          NULLIF(pi.selling_price, 0) AS selling_price,
+          pi.mrp AS mrp,
           pi.discount_percentage,
           pp.pharmacy_name,
           pp.verification_status,
@@ -61,7 +62,7 @@ export async function GET() {
           medicine_id: item.medicine_id,
           name: item.name,
           requires_prescription: Boolean(item.requires_prescription),
-          price: Number(inventory.selling_price),
+          price: Number(inventory.selling_price ?? inventory.mrp ?? item.mrp ?? 0),
           discount_percentage: Number(inventory.discount_percentage),
           image_url: item.image_url,
           pharmacy_id: inventory.pharmacy_id,

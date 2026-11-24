@@ -28,6 +28,7 @@ export default function AddMedicineForm({ onMedicineAdded }: { onMedicineAdded?:
     mrp: "",
     quantity: "",
     unitPrice: "",
+    sellingPrice: "",
     notes: "",
     imageUrl: ""
   })
@@ -85,6 +86,7 @@ export default function AddMedicineForm({ onMedicineAdded }: { onMedicineAdded?:
           mrp: "",
           quantity: "",
           unitPrice: "",
+          sellingPrice: "",
           notes: "",
           imageUrl: ""
         })
@@ -242,7 +244,7 @@ export default function AddMedicineForm({ onMedicineAdded }: { onMedicineAdded?:
                   />
                 </div>
                 <div>
-                  <Label>Unit Price *</Label>
+                  <Label>Purchase Cost / Wholesale Price *</Label>
                   <Input
                     name="unitPrice"
                     type="number"
@@ -250,6 +252,20 @@ export default function AddMedicineForm({ onMedicineAdded }: { onMedicineAdded?:
                     value={formData.unitPrice}
                     onChange={handleInputChange}
                     placeholder="Cost per unit"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Selling Price *</Label>
+                  <Input
+                    name="sellingPrice"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={formData.mrp || undefined}
+                    value={formData.sellingPrice}
+                    onChange={handleInputChange}
+                    placeholder="Customer selling price"
                     required
                   />
                 </div>

@@ -92,9 +92,25 @@ export async function GET() {
 
     const cartItems = await sql`
       SELECT c.id, c.quantity, c.created_at,
-             m.id as medicine_id, m.name, m.mrp, m.image_url, m.requires_prescription
+             m.id as medicine_id, m.name, COALESCE(pi.mrp, m.mrp) as mrp,
+             m.image_url, m.requires_prescription,
+             NULLIF(pi.selling_price, 0) AS selling_price, pi.discount_percentage,
+             pi.pharmacy_id, pp.pharmacy_name
       FROM cart_items c
       JOIN medicines m ON c.medicine_id = m.id
+      LEFT JOIN LATERAL (
+        SELECT pi.*
+        FROM pharmacy_inventory pi
+        JOIN pharmacy_profiles pp ON pp.id = pi.pharmacy_id
+        WHERE pi.medicine_id = c.medicine_id
+          AND pp.verification_status = 'verified'
+          AND pi.stock_quantity > 0
+          AND (pi.expiry_date IS NULL OR pi.expiry_date >= CURRENT_DATE)
+        ORDER BY pi.selling_price * (1 - COALESCE(pi.discount_percentage, 0) / 100.0) ASC,
+                 pi.expiry_date DESC NULLS LAST
+        LIMIT 1
+      ) pi ON true
+      LEFT JOIN pharmacy_profiles pp ON pp.id = pi.pharmacy_id
       WHERE c.user_id = ${user.id}
       ORDER BY c.created_at DESC
     `
