@@ -20,6 +20,8 @@ interface CartItem {
   mrp: string
   image_url: string | null
   requires_prescription: boolean
+  selling_price: string | number | null
+  discount_percentage: string | number | null
 }
 
 export function CartItems() {
@@ -95,7 +97,11 @@ export function CartItems() {
   }
 
   const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + Number.parseFloat(item.mrp || "0") * item.quantity, 0)
+    return cartItems.reduce((total, item) => {
+      const sellingPrice = Number(item.selling_price ?? item.mrp ?? 0)
+      const discount = Number(item.discount_percentage ?? 0)
+      return total + (sellingPrice - sellingPrice * discount / 100) * item.quantity
+    }, 0)
   }
 
   const subtotal = calculateTotal()
@@ -186,12 +192,21 @@ export function CartItems() {
                       <div>
                         <h3 className="font-semibold text-foreground">{item.name}</h3>
                         <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>₹{Number.parseFloat(item.mrp || "0").toFixed(2)} each</span>
+                          <span>
+                            ₹{(
+                              Number(item.selling_price ?? item.mrp ?? 0) *
+                              (1 - Number(item.discount_percentage ?? 0) / 100)
+                            ).toFixed(2)} each
+                          </span>
                           {item.requires_prescription && <Badge variant="outline">Prescription aware</Badge>}
                         </div>
                       </div>
                       <p className="text-lg font-semibold text-primary">
-                        ₹{(Number.parseFloat(item.mrp || "0") * item.quantity).toFixed(2)}
+                        ₹{(
+                          Number(item.selling_price ?? item.mrp ?? 0) *
+                          (1 - Number(item.discount_percentage ?? 0) / 100) *
+                          item.quantity
+                        ).toFixed(2)}
                       </p>
                     </div>
 

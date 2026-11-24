@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
         pi.discount_percentage,
         pi.batch_number,
         pi.expiry_date,
+        COALESCE(pi.mrp, m.mrp) AS mrp,
         pi.last_updated,
         m.name AS medicine_name,
         m.generic_name,
         m.manufacturer,
         m.image_url,
-        m.mrp,
         COALESCE(
           json_agg(mi.image_url) FILTER (WHERE mi.image_url IS NOT NULL),
           '[]'
