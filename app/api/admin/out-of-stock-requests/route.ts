@@ -36,9 +36,19 @@ export async function GET(request: NextRequest) {
             osr.created_at,
             osr.updated_at,
             osr.fulfilled_at,
+            osr.customer_id,
+            osr.full_name,
+            osr.phone,
+            osr.address_line1,
+            osr.address_line2,
+            osr.city,
+            osr.state,
+            osr.pincode,
+            osr.accept_substitute,
             pp.pharmacy_name,
-            pu.full_name AS contact_person,
-            pu.phone,
+            COALESCE(osr.full_name, pu.full_name) AS contact_person,
+            COALESCE(osr.phone, pu.phone) AS phone,
+            cu.full_name AS customer_name,
             dp.company_name AS distributor_name,
             du.full_name AS distributor_contact,
             m.name AS medicine_name,
@@ -49,12 +59,14 @@ export async function GET(request: NextRequest) {
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
           LEFT JOIN users pu ON pu.id = pp.user_id
           LEFT JOIN users du ON du.id = dp.user_id
+          LEFT JOIN users cu ON cu.id = osr.customer_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           WHERE (${status === undefined || status === null || status === "all"} OR osr.status = ${status})
             AND (${searchParam === null} OR (
               LOWER(pp.pharmacy_name) LIKE ${searchParam}
               OR LOWER(m.name) LIKE ${searchParam}
               OR LOWER(dp.company_name) LIKE ${searchParam}
+              OR LOWER(COALESCE(osr.full_name, cu.full_name, '')) LIKE ${searchParam}
             ))
           ORDER BY osr.created_at DESC
           LIMIT ${pageSize} OFFSET ${offset}
@@ -74,9 +86,19 @@ export async function GET(request: NextRequest) {
             osr.created_at,
             osr.updated_at,
             osr.fulfilled_at,
+            osr.customer_id,
+            osr.full_name,
+            osr.phone,
+            osr.address_line1,
+            osr.address_line2,
+            osr.city,
+            osr.state,
+            osr.pincode,
+            osr.accept_substitute,
             pp.pharmacy_name,
-            pu.full_name AS contact_person,
-            pu.phone,
+            COALESCE(osr.full_name, pu.full_name) AS contact_person,
+            COALESCE(osr.phone, pu.phone) AS phone,
+            cu.full_name AS customer_name,
             dp.company_name AS distributor_name,
             du.full_name AS distributor_contact,
             m.name AS medicine_name,
@@ -87,6 +109,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
           LEFT JOIN users pu ON pu.id = pp.user_id
           LEFT JOIN users du ON du.id = dp.user_id
+          LEFT JOIN users cu ON cu.id = osr.customer_id
           LEFT JOIN medicines m ON osr.medicine_id = m.id
           ORDER BY osr.created_at DESC
           LIMIT ${pageSize} OFFSET ${offset}
@@ -101,11 +124,13 @@ export async function GET(request: NextRequest) {
           LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
           LEFT JOIN users pu ON pu.id = pp.user_id
           LEFT JOIN users du ON du.id = dp.user_id
+          LEFT JOIN users cu ON cu.id = osr.customer_id
           WHERE (${status === undefined || status === null || status === "all"} OR osr.status = ${status})
             AND (${searchParam === null} OR (
               LOWER(pp.pharmacy_name) LIKE ${searchParam}
               OR LOWER(m.name) LIKE ${searchParam}
               OR LOWER(dp.company_name) LIKE ${searchParam}
+              OR LOWER(COALESCE(osr.full_name, cu.full_name, '')) LIKE ${searchParam}
             ))
         `
       : await sql`

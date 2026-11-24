@@ -28,10 +28,20 @@ export async function GET(
         osr.created_at,
         osr.updated_at,
         osr.fulfilled_at,
+        osr.customer_id,
+        osr.full_name,
+        osr.phone,
+        osr.address_line1,
+        osr.address_line2,
+        osr.city,
+        osr.state,
+        osr.pincode,
+        osr.accept_substitute,
         pp.pharmacy_name,
-        pu.full_name AS contact_person,
-        pu.phone,
+        COALESCE(osr.full_name, pu.full_name) AS contact_person,
+        COALESCE(osr.phone, pu.phone) AS phone,
         pu.email,
+        cu.full_name AS customer_name,
         dp.company_name AS distributor_name,
         du.full_name AS distributor_contact,
         dp.phone_number AS distributor_phone,
@@ -47,6 +57,7 @@ export async function GET(
       LEFT JOIN distributor_profiles dp ON osr.distributor_id = dp.id
       LEFT JOIN users pu ON pu.id = pp.user_id
       LEFT JOIN users du ON du.id = dp.user_id
+      LEFT JOIN users cu ON cu.id = osr.customer_id
       LEFT JOIN medicines m ON osr.medicine_id = m.id
       LEFT JOIN distributor_medicines dm ON osr.distributor_medicine_id = dm.id
       WHERE osr.id = ${id}

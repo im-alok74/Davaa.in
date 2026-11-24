@@ -19,6 +19,14 @@ interface OutOfStockRequest {
   distributor_id: number
   medicine_id: number
   pharmacy_name: string
+  customer_name?: string | null
+  full_name?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  city?: string | null
+  state?: string | null
+  pincode?: string | null
+  accept_substitute?: boolean
   contact_person: string
   phone: string
   distributor_name: string | null
@@ -356,7 +364,7 @@ export function AdminOutOfStockRequestsTable() {
                 <TableBody>
                   {requests.map((req) => (
                     <TableRow key={req.id}>
-                      <TableCell className="font-medium">{req.pharmacy_name}</TableCell>
+                      <TableCell className="font-medium">{req.pharmacy_name || req.customer_name || req.contact_person || "Customer"}</TableCell>
                       <TableCell>{req.medicine_name}</TableCell>
                       <TableCell>{req.requested_quantity}</TableCell>
                       <TableCell>{req.distributor_name || "—"}</TableCell>
@@ -423,10 +431,26 @@ export function AdminOutOfStockRequestsTable() {
           {selectedRequest && (
             <div className="space-y-4">
               {/* Pharmacy Info */}
+              {!selectedRequest.pharmacy_name && (
+                <div className="pb-4 border-b">
+                  <p className="text-sm font-medium text-muted-foreground">Delivery Address</p>
+                  <p className="mt-2">{[
+                    selectedRequest.address_line1,
+                    selectedRequest.address_line2,
+                    selectedRequest.city,
+                    selectedRequest.state,
+                    selectedRequest.pincode,
+                  ].filter(Boolean).join(", ")}</p>
+                  {selectedRequest.accept_substitute && (
+                    <p className="mt-2 text-sm text-emerald-700">Customer accepts a suitable substitute.</p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 pb-4 border-b">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Pharmacy</p>
-                  <p className="font-medium">{selectedRequest.pharmacy_name}</p>
+                  <p className="text-sm font-medium text-muted-foreground">{selectedRequest.pharmacy_name ? "Pharmacy" : "Customer"}</p>
+                  <p className="font-medium">{selectedRequest.pharmacy_name || selectedRequest.customer_name || selectedRequest.full_name || selectedRequest.contact_person}</p>
                   <p className="text-sm text-muted-foreground">{selectedRequest.contact_person}</p>
                   <p className="text-sm text-muted-foreground">{selectedRequest.phone}</p>
                 </div>

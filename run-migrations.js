@@ -23,6 +23,7 @@ async function runMigrations() {
     '021-out-of-stock-requests.sql',
     '022-create-settings-table.sql',
     '023-medicine-master-search-and-bulk.sql',
+    '025-customer-out-of-stock-requests.sql',
   ];
 
   try {

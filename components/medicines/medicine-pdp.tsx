@@ -28,6 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { medicineImageOrArt, medicineImageSrc, safeImageSrc } from '@/lib/images'
@@ -224,6 +225,16 @@ export function MedicinePdp({
   const [reviewTitle, setReviewTitle] = useState('')
   const [reviewText, setReviewText] = useState('')
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false)
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
+  const [requestFullName, setRequestFullName] = useState('')
+  const [requestPhone, setRequestPhone] = useState('')
+  const [requestAddress1, setRequestAddress1] = useState('')
+  const [requestAddress2, setRequestAddress2] = useState('')
+  const [requestCity, setRequestCity] = useState('')
+  const [requestState, setRequestState] = useState('')
+  const [requestPincode, setRequestPincode] = useState('')
+  const [acceptSubstitute, setAcceptSubstitute] = useState(false)
 
   const ratingBreakdown = useMemo(() => {
     const total = Math.max(reviewStats.total_reviews || 0, 1)
@@ -329,6 +340,54 @@ export function MedicinePdp({
         description: 'Something went wrong while starting checkout.',
         variant: 'destructive',
       })
+    }
+  }
+
+  const handleOutOfStockRequest = async () => {
+    if (!requestFullName.trim() || !requestPhone.trim() || !requestAddress1.trim() ||
+        !requestCity.trim() || !requestState.trim() || !requestPincode.trim()) {
+      toast({ title: 'Delivery details required', description: 'Please complete all required address fields.', variant: 'destructive' })
+      return
+    }
+
+    setIsSubmittingRequest(true)
+    try {
+      const response = await fetch('/api/out-of-stock-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medicineId: medicine.id,
+          quantity,
+          fullName: requestFullName,
+          phone: requestPhone,
+          addressLine1: requestAddress1,
+          addressLine2: requestAddress2,
+          city: requestCity,
+          state: requestState,
+          pincode: requestPincode,
+          acceptSubstitute,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (response.status === 401) {
+        setRequestDialogOpen(false)
+        toast({ title: 'Sign in required', description: 'Please sign in to submit a medicine request.', variant: 'destructive' })
+        router.push('/signin')
+        return
+      }
+
+      if (!response.ok) {
+        toast({ title: 'Request not submitted', description: data.error || 'Please try again.', variant: 'destructive' })
+        return
+      }
+
+      setRequestDialogOpen(false)
+      toast({ title: 'Request submitted', description: data.message })
+    } catch {
+      toast({ title: 'Error', description: 'Something went wrong while submitting your request.', variant: 'destructive' })
+    } finally {
+      setIsSubmittingRequest(false)
     }
   }
 
@@ -568,15 +627,56 @@ export function MedicinePdp({
                       </div>
 
                       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                        <Button className="flex-1 gap-2" onClick={handleAddToCart} disabled={!stockAvailable}>
-                          <ShoppingCart className="h-4 w-4" />
-                          Add to Cart
-                        </Button>
-                        <Button className="flex-1 gap-2" variant="secondary" onClick={handleBuyNow} disabled={!stockAvailable}>
-                          <ShoppingBag className="h-4 w-4" />
-                          Buy Now
-                        </Button>
+                        {stockAvailable ? (
+                          <>
+                            <Button className="flex-1 gap-2" onClick={handleAddToCart}>
+                              <ShoppingCart className="h-4 w-4" />
+                              Add to Cart
+                            </Button>
+                            <Button className="flex-1 gap-2" variant="secondary" onClick={handleBuyNow}>
+                              <ShoppingBag className="h-4 w-4" />
+                              Buy Now
+                            </Button>
+                          </>
+                        ) : (
+                          <Button className="w-full gap-2" onClick={() => setRequestDialogOpen(true)}>
+                            <Package2 className="h-4 w-4" />
+                            Request this medicine
+                          </Button>
+                        )}
                       </div>
+
+                      <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
+                        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle>Request {medicine.name}</DialogTitle>
+                          </DialogHeader>
+                          <p className="text-sm text-muted-foreground">
+                            We will search wholesale supply for this medicine. Your delivery details will be used only if we can fulfil the request.
+                          </p>
+                          <div className="grid gap-3 py-2">
+                            <Input placeholder="Full name *" value={requestFullName} onChange={(e) => setRequestFullName(e.target.value)} />
+                            <Input placeholder="Mobile number *" inputMode="tel" value={requestPhone} onChange={(e) => setRequestPhone(e.target.value)} />
+                            <Input placeholder="Address line 1 *" value={requestAddress1} onChange={(e) => setRequestAddress1(e.target.value)} />
+                            <Input placeholder="Address line 2" value={requestAddress2} onChange={(e) => setRequestAddress2(e.target.value)} />
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Input placeholder="City *" value={requestCity} onChange={(e) => setRequestCity(e.target.value)} />
+                              <Input placeholder="State *" value={requestState} onChange={(e) => setRequestState(e.target.value)} />
+                            </div>
+                            <Input placeholder="Pincode *" inputMode="numeric" maxLength={6} value={requestPincode} onChange={(e) => setRequestPincode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+                              <input type="checkbox" checked={acceptSubstitute} onChange={(e) => setAcceptSubstitute(e.target.checked)} className="mt-1" />
+                              <span>I am open to a suitable substitute if this exact medicine is unavailable.</span>
+                            </label>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setRequestDialogOpen(false)}>Cancel</Button>
+                            <Button onClick={handleOutOfStockRequest} disabled={isSubmittingRequest}>
+                              {isSubmittingRequest ? 'Submitting...' : 'Submit request'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
 
                       <div className="mt-5 rounded-2xl border border-dashed border-border/70 p-4">
                         <div className="flex items-center gap-2 text-sm font-medium">
